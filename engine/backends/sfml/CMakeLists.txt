@@ -3,7 +3,11 @@
 find_package(SFML 3 CONFIG REQUIRED COMPONENTS Graphics Window Audio System)
 
 add_library(ntype-engine-sfml STATIC
-    src/SfmlBackend.cpp
+    src/KeyMapping.cpp
+    src/SfmlAudio.cpp
+    src/SfmlInput.cpp
+    src/SfmlRenderer.cpp
+    src/SfmlWindow.cpp
 )
 add_library(ntype::engine-sfml ALIAS ntype-engine-sfml)
 
