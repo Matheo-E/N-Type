@@ -5,6 +5,13 @@ find_package(Threads REQUIRED)
 
 add_library(ntype-engine STATIC
     src/Version.cpp
+    src/ecs/Registry.cpp
+    src/ecs/SystemScheduler.cpp
+    src/events/EventBus.cpp
+    src/math/Random.cpp
+    src/scene/StateMachine.cpp
+    src/time/GameLoop.cpp
+    src/util/Log.cpp
 )
 add_library(ntype::engine ALIAS ntype-engine)
 

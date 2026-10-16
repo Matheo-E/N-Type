@@ -2,7 +2,11 @@ find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
 add_executable(ntype_tests
-    engine/VersionTest.cpp
+    engine/ecs/RegistryTest.cpp
+    engine/events/EventBusTest.cpp
+    engine/math/RandomTest.cpp
+    engine/scene/StateMachineTest.cpp
+    engine/time/GameLoopTest.cpp
 )
 target_link_libraries(ntype_tests PRIVATE ntype::rtype GTest::gtest GTest::gtest_main)
 ntype_set_warnings(ntype_tests)
