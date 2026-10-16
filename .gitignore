@@ -1,0 +1,16 @@
+# Build trees and vcpkg output
+/build/
+/out/
+/vcpkg_installed/
+CMakeUserPresets.json
+
+# IDEs
+/.vscode/
+/.idea/
+/.vs/
+*.swp
+
+# Binaries copied next to the sources by mistake
+/r-type_server
+/r-type_client
+*.exe

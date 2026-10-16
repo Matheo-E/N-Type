@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "n-type",
+  "version": "0.1.0",
+  "description": "R-Type networked shoot'em up and its reusable engine",
+  "builtin-baseline": "3cd21e48a75f67acfef289da52893ce79144aaa1",
+  "dependencies": [
+    "asio",
+    "nlohmann-json"
+  ],
+  "default-features": ["client", "tests"],
+  "features": {
+    "client": {
+      "description": "Graphical client (SFML backend)",
+      "dependencies": [
+        {
+          "name": "sfml",
+          "default-features": false,
+          "features": ["audio", "graphics", "window"]
+        }
+      ]
+    },
+    "tests": {
+      "description": "Unit tests",
+      "dependencies": ["gtest"]
+    }
+  }
+}
