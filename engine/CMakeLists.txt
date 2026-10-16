@@ -9,6 +9,11 @@ add_library(ntype-engine STATIC
     src/ecs/SystemScheduler.cpp
     src/events/EventBus.cpp
     src/math/Random.cpp
+    src/net/Endpoint.cpp
+    src/net/NetworkThread.cpp
+    src/net/Packet.cpp
+    src/net/ReliableChannel.cpp
+    src/net/UdpSocket.cpp
     src/scene/StateMachine.cpp
     src/time/GameLoop.cpp
     src/util/Log.cpp
