@@ -59,7 +59,10 @@ GameData parse(const json& root) {
     for (const auto& texture : root.at("textures").items()) {
         data.textures.push_back({texture.key(), texture.value().get<std::string>()});
     }
-    for (const auto& sound : root.value("sounds", json::object()).items()) {
+    // Named, not iterated as a temporary: before C++23 the temporary returned
+    // by value() would be destroyed before the loop body runs.
+    const json sounds = root.value("sounds", json::object());
+    for (const auto& sound : sounds.items()) {
         data.sounds.push_back({sound.key(), sound.value().get<std::string>()});
     }
     data.font = root.value("font", std::string{});
