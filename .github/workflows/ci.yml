@@ -105,3 +105,45 @@ jobs:
           call build.bat || exit /b 1
           if not exist r-type_server.exe exit /b 1
           if not exist r-type_client.exe exit /b 1
+
+  # Copies main to the Epitech repository, which is the one that gets graded.
+  # Runs only from this repository, and only once every check above passed, so
+  # a broken main is never pushed. "Run workflow" on main re-runs the mirror;
+  # on any other branch it only checks that the key can reach the repository.
+  mirror:
+    name: Mirror main to the school repository
+    needs: [format, build]
+    if: >-
+      github.repository == 'Matheo-E/N-Type' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: mirror
+      cancel-in-progress: false
+    env:
+      TARGET: git@github.com:EpitechPGE3-2026/G-ING-500-RUN-5-1-rtype-1.git
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load the mirror key
+        env:
+          SSH_KEY: ${{ secrets.MIRROR_SSH_KEY }}
+        run: |
+          [ -n "$SSH_KEY" ] || { echo "::error::secret MIRROR_SSH_KEY is not set"; exit 1; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          # GitHub's published host key (api.github.com/meta), pinned rather than scanned.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+
+      - name: Check access to the school repository
+        run: git ls-remote "$TARGET" > /dev/null
+
+      - name: Push main
+        if: github.ref == 'refs/heads/main'
+        # --force: the school repository mirrors main exactly, history rewrites included.
+        run: git push --force "$TARGET" HEAD:refs/heads/main
