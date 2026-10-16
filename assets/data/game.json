@@ -1,0 +1,106 @@
+{
+  "world_size": [1280, 720],
+
+  "textures": {
+    "players": "sprites/players.png",
+    "bydos": "sprites/bydos.png",
+    "pod": "sprites/pod.png",
+    "shots": "sprites/shots.png",
+    "explosions": "sprites/explosions.png"
+  },
+  "sounds": {
+    "shot": "audio/shot.wav",
+    "explosion": "audio/explosion.wav",
+    "player_hit": "audio/player_hit.wav"
+  },
+  "font": "fonts/PressStart2P-Regular.ttf",
+
+  "projectiles": [
+    {
+      "name": "player_missile",
+      "speed": 900,
+      "damage": 1,
+      "lifetime": 2.0,
+      "size": [28, 14],
+      "sprite": { "texture": "shots", "frames": [[249, 103, 16, 12], [267, 103, 16, 12]], "frame_time": 0.08, "scale": 2 }
+    },
+    {
+      "name": "enemy_missile",
+      "speed": 330,
+      "damage": 1,
+      "lifetime": 6.0,
+      "size": [14, 14],
+      "sprite": { "texture": "shots", "frames": [[243, 276, 12, 12], [260, 276, 12, 12], [277, 276, 12, 12]], "frame_time": 0.1, "scale": 2 }
+    }
+  ],
+
+  "player": {
+    "speed": 360,
+    "hp": 1,
+    "lives": 3,
+    "fire_cooldown": 0.18,
+    "projectile": "player_missile",
+    "respawn_delay": 2.0,
+    "invulnerability": 2.5,
+    "size": [52, 24],
+    "sprites": [
+      { "texture": "players", "frames": [[67, 2, 32, 15]], "scale": 2 },
+      { "texture": "players", "frames": [[67, 19, 32, 15]], "scale": 2 },
+      { "texture": "players", "frames": [[67, 36, 32, 15]], "scale": 2 },
+      { "texture": "players", "frames": [[67, 53, 32, 15]], "scale": 2 }
+    ]
+  },
+
+  "enemies": [
+    {
+      "name": "bydos",
+      "hp": 2,
+      "speed": 170,
+      "behavior": "sine",
+      "amplitude": 70,
+      "frequency": 0.5,
+      "score": 100,
+      "fire_cooldown": [2.5, 4.5],
+      "projectile": "enemy_missile",
+      "size": [36, 40],
+      "sprite": {
+        "texture": "bydos",
+        "frames": [[5, 6, 21, 24], [38, 6, 21, 24], [71, 6, 21, 24], [104, 6, 21, 24], [137, 6, 21, 24], [170, 6, 21, 24], [203, 6, 21, 24], [236, 6, 21, 24]],
+        "frame_time": 0.09,
+        "scale": 2
+      }
+    },
+    {
+      "name": "pod",
+      "hp": 1,
+      "speed": 260,
+      "behavior": "straight",
+      "score": 50,
+      "size": [34, 30],
+      "sprite": {
+        "texture": "pod",
+        "frames": [[1, 2, 16, 14], [18, 2, 16, 14], [35, 2, 16, 14], [52, 2, 16, 14], [69, 2, 16, 14], [86, 2, 16, 14], [103, 2, 16, 14], [120, 2, 16, 14], [137, 2, 16, 14], [154, 2, 16, 14], [171, 2, 16, 14], [188, 2, 16, 14]],
+        "frame_time": 0.07,
+        "scale": 2.5
+      }
+    }
+  ],
+
+  "waves": [
+    { "at": 1.0, "enemy": "pod", "count": 5, "spacing": 0.35, "y": 200 },
+    { "at": 4.0, "enemy": "bydos", "count": 4, "spacing": 0.6, "y": 420 },
+    { "at": 7.0, "enemy": "pod", "count": 6, "spacing": 0.3, "y": 560 },
+    { "at": 9.0, "enemy": "bydos", "count": 5, "spacing": 0.5 },
+    { "at": 12.0, "enemy": "pod", "count": 8, "spacing": 0.25 },
+    { "at": 13.0, "enemy": "bydos", "count": 3, "spacing": 0.7, "y": 180 },
+    { "at": 16.0, "enemy": "bydos", "count": 6, "spacing": 0.5 }
+  ],
+  "wave_loop_delay": 4.0,
+
+  "explosion": {
+    "texture": "explosions",
+    "frames": [[130, 1, 30, 32], [162, 1, 31, 32], [194, 1, 32, 32], [228, 1, 31, 32], [261, 1, 31, 32]],
+    "frame_time": 0.07,
+    "scale": 2
+  }
+}
