@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: pip install clang-format==23.1.1
+      - name: Check formatting
+        run: |
+          git ls-files '*.hpp' '*.cpp' | xargs clang-format --dry-run --Werror
+
+  build:
+    name: Build & test (${{ matrix.preset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux-release
+          - os: windows-latest
+            preset: windows-release
+    env:
+      # Not VCPKG_ROOT: the MSVC setup exports its own VCPKG_ROOT (the copy
+      # bundled with Visual Studio), so ours is set once that step has run.
+      VCPKG_DIR: ${{ github.workspace }}/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build autoconf automake autoconf-archive libtool \
+            libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxext-dev libxrender-dev \
+            libxinerama-dev libudev-dev libgl1-mesa-dev libegl1-mesa-dev libasound2-dev \
+            libpulse-dev
+
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Read the vcpkg baseline
+        id: baseline
+        shell: bash
+        run: echo "commit=$(jq -r '.["builtin-baseline"]' vcpkg.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch vcpkg at the pinned baseline
+        shell: bash
+        run: |
+          git clone --filter=tree:0 https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
+          git -C "$VCPKG_DIR" checkout ${{ steps.baseline.outputs.commit }}
+          mkdir -p vcpkg-cache
+
+      - name: Bootstrap vcpkg (Linux)
+        if: runner.os == 'Linux'
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Use the pinned vcpkg
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_DIR" >> "$GITHUB_ENV"
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.preset }}-
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DNTYPE_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}

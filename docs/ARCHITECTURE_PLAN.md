@@ -21,10 +21,10 @@ Subject requirements this plan satisfies (from `pdf/rtype-project.pdf`):
 
 | Concern              | Choice                                   | Why (short) |
 |----------------------|------------------------------------------|-------------|
-| Language / standard  | C++20                                    | concepts, `std::span`, designated initialisers, `<bit>` for endianness |
+| Language / standard  | C++23                                    | `std::expected` for decode errors, concepts, `std::span`, `<bit>` for endianness |
 | Build                | CMake ≥ 3.25, presets (`CMakePresets.json`) | de-facto standard, Windows + Linux, IDE support |
 | Package manager      | vcpkg (manifest mode, `vcpkg.json`)      | binary caching keeps CI cheap, first-class MSVC support. CPM is the fallback if vcpkg is a problem the machines |
-| Rendering/Audio/Input| SFML 2.6                                 | allowed by subject, simple 2D API, cross-platform |
+| Rendering/Audio/Input| SFML 3                                   | allowed by subject, simple 2D API, cross-platform; the version vcpkg ships |
 | Networking           | standalone Asio                          | allowed by subject, async UDP, portable, no Boost |
 | Serialization        | hand-written binary codec (`ByteBuffer`) | protocol MUST be binary and documented; no dependency needed |
 | Config / levels      | JSON (nlohmann-json) in Part 1, Lua (sol2) scripting in Part 2 | data-driven content without recompiling |
