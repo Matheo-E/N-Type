@@ -93,3 +93,15 @@ jobs:
 
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
+
+      - name: Build script (Linux)
+        if: runner.os == 'Linux'
+        run: ./build.sh && test -x r-type_server && test -x r-type_client
+
+      - name: Build script (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          call build.bat || exit /b 1
+          if not exist r-type_server.exe exit /b 1
+          if not exist r-type_client.exe exit /b 1

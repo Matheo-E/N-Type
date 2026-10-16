@@ -9,31 +9,37 @@ runs the game and clients only send inputs and display the result.
 
 ## Building
 
-Requirements: CMake 3.25+, Ninja, a C++23 compiler (GCC 14+, Clang 18+ or
-MSVC 2022 17.10+) and [vcpkg](https://github.com/microsoft/vcpkg). Every
-library is fetched by vcpkg; nothing has to be installed system-wide.
-
 ```sh
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
-export VCPKG_ROOT=~/vcpkg            # Windows: $env:VCPKG_ROOT = "C:\path\to\vcpkg"
-
-cmake --preset linux-release         # or windows-release (from a VS developer prompt)
-cmake --build --preset linux-release
-ctest --preset linux-release
+./build.sh          # Linux
+build.bat           # Windows
 ```
 
-On Linux, SFML needs the system X11/OpenGL/udev headers. On Debian/Ubuntu:
-`sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev
-libgl1-mesa-dev libasound2-dev autoconf automake libtool`. To build only the
-server and the tests (no SFML at all), use the `linux-server` preset.
+That's all: the script fetches vcpkg on the first run (or uses yours if
+`VCPKG_ROOT` points to one), builds every dependency, then the project, and
+copies `r-type_server` and `r-type_client` to the repository root. The first
+build takes a while because the dependencies are compiled; later ones are fast.
+Options: `--debug`, `--clean`, and `--server-only` (Linux) to skip the client
+and SFML entirely. `--help` lists them.
 
-The binaries are written to `build/<preset>/bin/` and find `assets/` on their own.
+Requirements:
+
+- **Linux:** git, CMake 3.25+, Ninja and GCC 14+ or Clang 18+. SFML also needs
+  the X11/OpenGL/udev headers; the script checks for them and prints the
+  install command for Debian/Ubuntu and Fedora if they are missing.
+- **Windows:** Visual Studio 2022 or newer with the *Desktop development with
+  C++* workload (it provides the compiler, CMake and Ninja) and git.
+
+Building by hand works too: `cmake --preset linux-release` (or
+`windows-release` from a Visual Studio developer prompt), then
+`cmake --build --preset linux-release` and `ctest --preset linux-release`, with
+`VCPKG_ROOT` pointing to a vcpkg checkout. The binaries are then in
+`build/<preset>/bin/`.
 
 ## Running
 
 ```sh
-./build/linux-release/bin/r-type_server -p 4242
-./build/linux-release/bin/r-type_client -h 127.0.0.1 -p 4242
+./r-type_server -p 4242
+./r-type_client -h 127.0.0.1 -p 4242
 ```
 
 Controls: arrows (or ZQSD/WASD) to move, Space to fire, Esc to quit.
