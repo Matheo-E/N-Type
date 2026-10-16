@@ -34,7 +34,9 @@ jobs:
           - os: windows-latest
             preset: windows-release
     env:
-      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      # Not VCPKG_ROOT: the MSVC setup exports its own VCPKG_ROOT (the copy
+      # bundled with Visual Studio), so ours is set once that step has run.
+      VCPKG_DIR: ${{ github.workspace }}/vcpkg
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
     steps:
       - uses: actions/checkout@v4
@@ -60,8 +62,8 @@ jobs:
       - name: Fetch vcpkg at the pinned baseline
         shell: bash
         run: |
-          git clone --filter=tree:0 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout ${{ steps.baseline.outputs.commit }}
+          git clone --filter=tree:0 https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
+          git -C "$VCPKG_DIR" checkout ${{ steps.baseline.outputs.commit }}
           mkdir -p vcpkg-cache
 
       - name: Bootstrap vcpkg (Linux)
@@ -71,6 +73,10 @@ jobs:
       - name: Bootstrap vcpkg (Windows)
         if: runner.os == 'Windows'
         run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Use the pinned vcpkg
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_DIR" >> "$GITHUB_ENV"
 
       - name: Restore the vcpkg binary cache
         uses: actions/cache@v4
