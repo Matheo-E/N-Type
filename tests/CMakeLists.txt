@@ -5,6 +5,10 @@ add_executable(ntype_tests
     engine/ecs/RegistryTest.cpp
     engine/events/EventBusTest.cpp
     engine/math/RandomTest.cpp
+    engine/net/ByteBufferTest.cpp
+    engine/net/NetworkThreadTest.cpp
+    engine/net/PacketTest.cpp
+    engine/net/ReliableChannelTest.cpp
     engine/scene/StateMachineTest.cpp
     engine/time/GameLoopTest.cpp
 )
