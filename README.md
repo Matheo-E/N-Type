@@ -1,70 +1,103 @@
-# N-Type
+# N-Type — Two networked squares
 
-A networked, multiplayer remake of **R-Type**, built on a small reusable game
-engine. Up to four players fight the Bydos together; an authoritative server
-runs the game and clients only send inputs and display the result.
+A small demonstration: one square per connected player, up to two players on
+one UDP server. One player alone sees one square. A second square appears on both
+clients when a second player connects. Each client controls only its own square.
+The server computes all movement; clients send keys and display server positions.
 
-- `r-type_server`: authoritative, multithreaded UDP server
-- `r-type_client`: graphical client (SFML)
+## Build
 
-## Building
-
-Requirements: CMake 3.25+, Ninja, a C++23 compiler (GCC 14+, Clang 18+ or
-MSVC 2022 17.10+) and [vcpkg](https://github.com/microsoft/vcpkg). Every
-library is fetched by vcpkg; nothing has to be installed system-wide.
+Linux: git, CMake 3.25+, Ninja, a C++20 compiler and SFML's X11/OpenGL/udev headers.
+Windows: git and Visual Studio 2022+ with the Desktop development with C++ workload.
 
 ```sh
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
-export VCPKG_ROOT=~/vcpkg            # Windows: $env:VCPKG_ROOT = "C:\path\to\vcpkg"
-
-cmake --preset linux-release         # or windows-release (from a VS developer prompt)
-cmake --build --preset linux-release
-ctest --preset linux-release
+./build.sh       # Linux
 ```
 
-On Linux, SFML needs the system X11/OpenGL/udev headers. On Debian/Ubuntu:
-`sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev
-libgl1-mesa-dev libasound2-dev autoconf automake libtool`. To build only the
-server and the tests (no SFML at all), use the `linux-server` preset.
+```bat
+build.bat       rem Windows Command Prompt
+```
 
-The binaries are written to `build/<preset>/bin/` and find `assets/` on their own.
+The scripts build and copy both executables to the repository root. They support
+`--debug`, `--clean` and `--help`. vcpkg provides SFML (window/graphics) and Asio
+(network); there is no audio, external asset, ECS or menu. On Windows, keep the
+copied DLLs next to the executables. In PowerShell, prefix commands with `.\`.
 
-## Running
+## Run
+
+Start one server:
 
 ```sh
-./build/linux-release/bin/r-type_server -p 4242
-./build/linux-release/bin/r-type_client -h 127.0.0.1 -p 4242
+./r-type_server -p 4242
 ```
 
-Controls: arrows (or ZQSD/WASD) to move, Space to fire, Esc to quit.
-Both binaries print their options with `--help`.
+Start one client per player (in separate terminals or on different computers):
 
-## Repository layout
+```sh
+./r-type_client -h 127.0.0.1 -p 4242
+```
 
-| Path            | Content |
-|-----------------|---------|
-| `engine/`       | `ntype-engine`, the game-agnostic engine (ECS, events, time, scenes, networking) and its SFML backend |
-| `rtype_common/` | R-Type rules shared by client and server: components, systems, protocol |
-| `server/`       | `r-type_server` |
-| `client/`       | `r-type_client` |
-| `assets/`       | sprites, sounds, font and `data/game.json` (enemies, waves, weapons) |
-| `tests/`        | unit tests (GoogleTest) |
-| `tools/`        | asset generation scripts |
-| `docs/`         | architecture, protocol and contribution documents |
+On another computer, replace `127.0.0.1` with the **server computer's IPv4 address**.
+Windows uses `r-type_server.exe` and `r-type_client.exe` with the same arguments.
+Linux and Windows clients use the same binary protocol and can join the same server.
+Allow inbound **UDP 4242** on the server firewall. Internet hosting also requires
+appropriate router/hosting configuration; a LAN address is only reachable on that LAN.
 
-## Documentation
+- Move your square: arrows, WASD or ZQSD.
+- Quit: Escape or the window close button.
+- The window title identifies your player and connection status.
+- A third player waits with a "Server full" status and retries automatically.
+- Before connecting, or after a connection timeout, no squares are displayed.
 
-- [Architecture plan](docs/ARCHITECTURE_PLAN.md) and [class diagrams](docs/CLASS_UML.md)
-- [Network protocol](docs/PROTOCOL.md)
-- [Coding rules](docs/ARCHITECTURE.md) and [cross-platform rules](docs/COMPATIBILITY.md)
-- [Git workflow](GIT_WORKFLOW.md)
+## Files
 
-The CMake target graph enforces the layering: each library only sees the
-include directories of the libraries it links, so including a `client/` or
-`server/` header from `engine/` or `rtype_common/` fails to compile.
+| File | Responsibility |
+|------|----------------|
+| [ClientApp.cpp](client/src/ClientApp.cpp) | Window, keyboard and drawing |
+| [ClientNetwork.cpp](client/src/ClientNetwork.cpp) | Send keys, receive states and reconnect |
+| [main.cpp](client/src/main.cpp) | Start the client and parse options |
+| [server/src/main.cpp](server/src/main.cpp) | Accept two players, compute movement and send states |
+| [Protocol.hpp](shared/Protocol.hpp) | Shared constants and explicit binary encoding |
+| [Options.hpp](shared/Options.hpp) | Shared command-line parsing |
 
-## Credits
+The server runs a simple **single-threaded**, nonblocking loop at 60 ticks/s and
+sends full states at 30/s. This is a connection/window prototype, not the previous
+multithreaded R-Type engine. There is no prediction, interpolation, authentication
+or general reliable-message layer. Connect is retried every 500 ms. Full state packets
+are repeated, so a lost state can be replaced by the next one. Older input/state
+sequences are ignored. Disconnect is sent three times; a 3-second timeout handles
+lost disconnects and crashes. Movement stops after 250 ms without fresh input.
 
-Sprites: original R-Type sprite sheets provided with the subject.
-Font: *Press Start 2P* by CodeMan38, SIL Open Font License (`assets/fonts/OFL.txt`).
-Sound effects: generated by `tools/generate_sounds.py`.
+## Small binary protocol
+
+Each UDP datagram starts with `4E 54 01 type` (literal `NT`, version 1, message type),
+followed by a 32-bit connection nonce. All multibyte numbers are **little-endian**,
+encoded explicitly rather than copied from C++ structs. The nonce distinguishes
+connection attempts; it is not authentication.
+
+| Type | Direction | Remaining fields after the nonce | Total bytes |
+|------|-----------|---------------------------------|-------------|
+| 1 Connect | Client → Server | None | 8 |
+| 2 Input | Client → Server | Sequence `u32`, keys `u8` | 13 |
+| 3 State | Server → Client | Server tick `u32`, recipient slot `u8`, connected mask `u8`, then `(x u16, y u16)` for slots 0 and 1 | 22 |
+| 4 Disconnect | Client → Server | None | 8 |
+| 5 Full | Server → Client | None | 8 |
+
+Keys: left=1, right=2, up=4, down=8. Connected mask: bit 0 is blue, bit 1 is orange.
+Coordinates for disconnected slots are zero and are not drawn. Slot numbers start
+at zero. Positions refer to the square's top-left corner. Bounds are x=0…760,
+y=0…560 in an 800×600 window, with 40×40 squares moving at 250 pixels/s.
+Packets with invalid magic, version, length or field values are ignored.
+
+## Verification
+
+After building, run the black-box server checks (Python 3, standard library only):
+
+```sh
+python3 tests/network_smoke.py ./r-type_server
+```
+
+They check connection, one/two visible player slots, independent movement, malformed
+packets, refusal of a third player, old inputs, disconnects and crash timeouts.
+For the window, start two real clients and check that the second square appears
+and disappears as the other client connects and quits.

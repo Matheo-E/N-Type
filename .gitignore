@@ -1,16 +1,20 @@
-# Build trees and vcpkg output
+# Generated files and dependencies
 /build/
 /out/
+/vcpkg/
 /vcpkg_installed/
+/vcpkg-cache/
 CMakeUserPresets.json
+/r-type_client
+/r-type_server
+*.exe
+*.dll
 
-# IDEs
+# Editors
 /.vscode/
 /.idea/
 /.vs/
 *.swp
 
-# Binaries copied next to the sources by mistake
-/r-type_server
-/r-type_client
-*.exe
+# Python test cache
+__pycache__/

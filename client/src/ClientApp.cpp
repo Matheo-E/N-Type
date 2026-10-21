@@ -1,66 +1,88 @@
 #include "ClientApp.hpp"
 
-#include <memory>
+#include <SFML/Window/Event.hpp>
+#include <SFML/Window/Keyboard.hpp>
 
-#include <ntype/engine/util/Log.hpp>
-
-#include "states/ConnectingState.hpp"
+#include "Protocol.hpp"
 
 namespace ntype::client {
 
-ClientApp::ClientApp(ClientConfig config, rtype::GameData data, std::filesystem::path assets)
-    : config_(std::move(config)), data_(std::move(data)), assets_(std::move(assets)),
-      window_({1280, 720}, "R-Type"), renderer_(window_, data_.world_size), input_(window_),
-      loop_(engine::time::Duration(1.0 / 60.0)),
-      context_{config_, data_,    renderer_, audio_,
-               input_,  network_, states_,   [this] { loop_.stop(); }} {}
-
-void ClientApp::load_assets() {
-    for (const auto& texture : data_.textures) {
-        renderer_.load_texture(texture.id, assets_ / texture.path);
+ClientApp::ClientApp(const std::string& host, const std::uint16_t port)
+    : network_(host, port),
+      window_(sf::VideoMode({protocol::kWidth, protocol::kHeight}), "N-Type | Connecting",
+              sf::Style::Titlebar | sf::Style::Close) {
+    window_.setFramerateLimit(60);
+    for (auto& square : squares_) {
+        square.setSize({protocol::kSquareSize, protocol::kSquareSize});
     }
-    for (const auto& sound : data_.sounds) {
-        audio_.load_sound(sound.id, assets_ / sound.path);
-    }
-    if (!data_.font.empty() && !renderer_.load_font(kFont, assets_ / data_.font)) {
-        engine::log::warn("no font: texts will not be displayed");
-    }
+    squares_[0].setFillColor(sf::Color(80, 180, 255));
+    squares_[1].setFillColor(sf::Color(255, 160, 60));
 }
 
-void ClientApp::fixed_update(const float dt) {
-    for (const auto& event : window_.poll_events()) {
-        if (std::holds_alternative<engine::platform::WindowClosed>(event)) {
-            network_.disconnect(engine::time::SteadyClock::now());
-            loop_.stop();
+void ClientApp::run() {
+    while (window_.isOpen()) {
+        poll_events();
+        if (!window_.isOpen()) {
+            break;
+        }
+        network_.update(read_input());
+        std::string title = "N-Type | " + network_.status();
+        if (network_.state()) {
+            title += network_.state()->slot == 0 ? " (blue)" : " (orange)";
+        }
+        window_.setTitle(title + " | Arrows/WASD/ZQSD | Esc: quit");
+        render();
+    }
+    network_.disconnect();
+}
+
+void ClientApp::poll_events() {
+    while (const auto event = window_.pollEvent()) {
+        const auto* key = event->getIf<sf::Event::KeyPressed>();
+        if (event->is<sf::Event::Closed>() ||
+            (key != nullptr && key->code == sf::Keyboard::Key::Escape)) {
+            window_.close();
             return;
         }
-        states_.handle_event(event);
     }
-    states_.update(dt);
 }
 
-void ClientApp::render(const float alpha) {
-    renderer_.begin_frame({4, 4, 16, 255});
-    states_.render(renderer_, alpha);
-    constexpr double kScreenshotDelay = 6.0;
-    if (!config_.screenshot.empty() && uptime_.elapsed().count() > kScreenshotDelay) {
-        if (renderer_.save_screenshot(config_.screenshot)) {
-            engine::log::info("screenshot saved to {}", config_.screenshot.string());
+std::uint8_t ClientApp::read_input() const {
+    if (!window_.hasFocus()) {
+        return 0;
+    }
+    using Key = sf::Keyboard::Key;
+    const auto pressed = [](const Key key) { return sf::Keyboard::isKeyPressed(key); };
+    std::uint8_t input = 0;
+    if (pressed(Key::Left) || pressed(Key::A) || pressed(Key::Q)) {
+        input |= protocol::kLeft;
+    }
+    if (pressed(Key::Right) || pressed(Key::D)) {
+        input |= protocol::kRight;
+    }
+    if (pressed(Key::Up) || pressed(Key::W) || pressed(Key::Z)) {
+        input |= protocol::kUp;
+    }
+    if (pressed(Key::Down) || pressed(Key::S)) {
+        input |= protocol::kDown;
+    }
+    return input;
+}
+
+void ClientApp::render() {
+    window_.clear(sf::Color::Black);
+    if (const auto& state = network_.state()) {
+        for (std::size_t slot = 0; slot < squares_.size(); ++slot) {
+            // Only players currently connected to the server are visible.
+            if ((state->bits & (1U << slot)) == 0) {
+                continue;
+            }
+            squares_[slot].setPosition({static_cast<float>(state->positions[slot].x),
+                                        static_cast<float>(state->positions[slot].y)});
+            window_.draw(squares_[slot]);
         }
-        config_.screenshot.clear();
-        network_.disconnect(engine::time::SteadyClock::now());
-        loop_.stop();
     }
-    renderer_.end_frame();
-}
-
-int ClientApp::run() {
-    load_assets();
-    states_.push(std::make_unique<ConnectingState>(context_));
-    loop_.run([this](const float dt) { fixed_update(dt); },
-              [this](const float alpha) { render(alpha); });
-    window_.close();
-    return 0;
+    window_.display();
 }
 
 } // namespace ntype::client
