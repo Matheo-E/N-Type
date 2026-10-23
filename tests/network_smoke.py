@@ -1,46 +1,61 @@
-"""Black-box checks for the two-player demo (Python standard library only)."""
+"""Black-box checks for the server (Python standard library only)."""
 import socket
 import struct
 import subprocess
 import sys
 import time
 
-HEADER = struct.Struct('<2sBBI')
-STATE = struct.Struct('<2sBBIIBBHHHH')
+# Message types from docs/PROTOCOL_v2.md: one type byte, then the payload.
+CONNECT, ACCEPT, REFUSE, DISCONNECT, INPUT = 1, 2, 3, 4, 5
+SNAPSHOT, CLIENT_LEFT = 9, 11
+UP, DOWN, LEFT, RIGHT = 1, 2, 4, 8
+PLAYER_KIND = 1
+SPAWNS = {1: (100, 150), 2: (100, 270), 3: (100, 390), 4: (100, 510)}
+
+
+def parse(kind, payload):
+    if kind in (ACCEPT, REFUSE, CLIENT_LEFT):
+        return payload[0]
+    if kind == SNAPSHOT:
+        players = {}
+        for index in range(payload[0]):
+            entity, entity_kind, x, y = struct.unpack_from('<HBhh', payload, 1 + 7 * index)
+            assert entity_kind == PLAYER_KIND
+            players[entity] = (x, y)
+        return dict(players=players)
+    return None
 
 
 class Peer:
-    def __init__(self, port, nonce):
+    def __init__(self, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.connect(('127.0.0.1', port))
         self.socket.settimeout(0.1)
-        self.nonce = nonce
 
-    def send(self, kind, extra=b''):
-        self.socket.send(HEADER.pack(b'NT', 1, kind, self.nonce) + extra)
+    def send(self, kind, payload=b''):
+        self.socket.send(bytes([kind]) + payload)
 
-    def input(self, sequence, bits):
-        self.send(2, struct.pack('<IB', sequence, bits))
+    def input(self, bits):
+        self.send(INPUT, bytes([bits]))
 
-    def wait(self, predicate, timeout=2):
+    def wait(self, kind, predicate=lambda value: True, timeout=2):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
-                data = self.socket.recv(256)
+                data = self.socket.recv(1500)
             except (socket.timeout, ConnectionRefusedError, ConnectionResetError):
                 continue
-            if len(data) == 22:
-                value = STATE.unpack(data)
-                if value[:3] != (b'NT', 1, 3) or value[3] != self.nonce:
-                    continue
-                state = dict(tick=value[4], slot=value[5], mask=value[6],
-                             positions=((value[7], value[8]), (value[9], value[10])))
-                if predicate(state):
-                    return state
-            elif len(data) == 8 and HEADER.unpack(data) == (b'NT', 1, 5, self.nonce):
-                if predicate(None):
-                    return None
-        raise AssertionError('Expected server state not received')
+            if not data or data[0] != kind:
+                continue
+            value = parse(kind, data[1:])
+            if predicate(value):
+                return value
+        raise AssertionError(f'Expected message {kind} not received')
+
+    def skip(self, count):
+        """Returns the snapshot `count` snapshots from now (the server sends one per tick)."""
+        seen = []
+        return self.wait(SNAPSHOT, lambda s: seen.append(s) or len(seen) == count)
 
     def close(self):
         self.socket.close()
@@ -53,71 +68,79 @@ def check(binary):
     server = subprocess.Popen([binary, '-p', str(port)], stdout=subprocess.DEVNULL)
     peers = []
     try:
-        first, second, third = [Peer(port, nonce) for nonce in (101, 202, 303)]
-        peers = [first, second, third]
+        peers = [Peer(port) for _ in range(5)]
+        first, second, third, fourth, fifth = peers
         # Allow startup without assuming a fixed process startup duration.
         deadline = time.monotonic() + 5
         while True:
             assert server.poll() is None, 'Server failed to start'
-            first.send(1)
+            first.send(CONNECT)
             try:
-                alone = first.wait(lambda s: s is not None and s['mask'] == 1, 0.2)
+                assert first.wait(ACCEPT, timeout=0.2) == 1
                 break
             except AssertionError:
                 if time.monotonic() >= deadline:
                     raise
-        assert alone['slot'] == 0
-        assert alone['positions'][0] == (200, 280)
+        alone = first.wait(SNAPSHOT)
+        assert alone['players'] == {1: SPAWNS[1]}
 
-        # A malformed or server-only packet from a stranger must not create a player.
-        third.socket.send(b'garbage')
-        third.socket.send(HEADER.pack(b'NT', 9, 1, third.nonce))
-        unchanged = first.wait(lambda s: s is not None and s['tick'] > alone['tick'])
-        assert unchanged['mask'] == 1
+        # Malformed packets, or a server-only message from a stranger, must not create a player.
+        fifth.socket.send(b'garbage')
+        fifth.socket.send(bytes([CONNECT, 0]))
+        fifth.send(SNAPSHOT, bytes([0]))
+        fifth.send(INPUT, bytes([RIGHT]))
+        unchanged = first.skip(6)
+        assert unchanged['players'] == {1: SPAWNS[1]}
 
-        second.send(1)
-        both = first.wait(lambda s: s is not None and s['mask'] == 3)
-        other = second.wait(lambda s: s is not None and s['mask'] == 3)
-        assert other['slot'] == 1
-        assert both['positions'] == ((200, 280), (560, 280))
-        third.send(1)
-        third.wait(lambda s: s is None)  # Server full.
+        # Up to four players, each with the lowest free id; a fifth is refused.
+        for expected, peer in enumerate((second, third, fourth), start=2):
+            peer.send(CONNECT)
+            assert peer.wait(ACCEPT) == expected
+        full = first.wait(SNAPSHOT, lambda s: len(s['players']) == 4)
+        assert full['players'] == SPAWNS
+        fifth.send(CONNECT)
+        assert fifth.wait(REFUSE) == 1  # ServerFull
+
+        # A repeated Connect (lost Accept) gets the same id back.
+        first.send(CONNECT)
+        assert first.wait(ACCEPT) == 1
 
         # Each endpoint controls only its player; client coordinates are never sent.
-        first.input(10, 2)  # Right.
-        moved = first.wait(lambda s: s is not None and s['positions'][0][0] >= 220)
-        assert moved['positions'][1] == (560, 280)
-        first.input(11, 0)
-        stopped = first.wait(lambda s: s is not None and s['tick'] > moved['tick'] + 4)
-        first.input(9, 1)  # Old input must be ignored.
-        later = first.wait(lambda s: s is not None and s['tick'] > stopped['tick'] + 6)
-        assert later['positions'][0] == stopped['positions'][0]
+        first.input(RIGHT)
+        moved = first.wait(SNAPSHOT, lambda s: s['players'][1][0] >= 150)
+        assert moved['players'][2] == SPAWNS[2]
+        first.input(0)
+        stopped = first.skip(5)
+        later = first.skip(6)
+        assert later['players'][1] == stopped['players'][1]
 
-        second.input(1, 4)  # Up.
-        moved = second.wait(lambda s: s is not None and s['positions'][1][1] <= 260)
-        assert moved['positions'][0] == stopped['positions'][0]
-        second.input(2, 0)
-        second.send(4)
-        first.wait(lambda s: s is not None and s['mask'] == 1)
+        second.input(UP)
+        moved = first.wait(SNAPSHOT, lambda s: s['players'][2][1] <= 250)
+        assert moved['players'][1] == stopped['players'][1]
+        second.input(0)
 
-        # A freed slot can be used again; a crashed peer disappears after timeout.
-        second.send(1)
-        first.wait(lambda s: s is not None and s['mask'] == 3)
-        sequence = 20
-        deadline = time.monotonic() + 5
+        # A disconnect is announced to the others, and the freed id is reused.
+        second.send(DISCONNECT)
+        assert first.wait(CLIENT_LEFT, lambda player: player == 2) == 2
+        first.wait(SNAPSHOT, lambda s: 2 not in s['players'])
+        second.send(CONNECT)
+        assert second.wait(ACCEPT) == 2
+
+        # Silent (crashed) peers disappear after the timeout; the active one stays.
+        deadline = time.monotonic() + 8
         timed_out = False
         while time.monotonic() < deadline:
-            first.input(sequence, 0)
-            sequence += 1
-            state = first.wait(lambda s: s is not None)
-            if state['mask'] == 1:
+            first.input(0)
+            try:
+                first.wait(SNAPSHOT, lambda s: set(s['players']) == {1}, timeout=0.3)
                 timed_out = True
                 break
-            time.sleep(0.03)
-        assert timed_out, 'Crashed peer did not disappear'
+            except AssertionError:
+                continue
+        assert timed_out, 'Crashed peers did not disappear'
         assert server.poll() is None
-        print('PASS: one/two players, full server, malformed packets, independent movement,')
-        print('      stale input, disconnect, slot reuse and crash timeout.')
+        print('PASS: connect, four players, full server, malformed packets, independent movement,')
+        print('      repeated connect, disconnect, id reuse and crash timeout.')
     finally:
         for peer in peers:
             peer.close()

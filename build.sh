@@ -19,11 +19,11 @@ done
 for tool in git cmake ninja; do
     command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
-if command -v pkg-config >/dev/null && ! pkg-config --exists x11 xrandr xcursor xi gl libudev; then
+if command -v pkg-config >/dev/null && ! pkg-config --exists x11 xrandr xcursor xi gl glu libudev; then
     cat >&2 <<'PACKAGES'
-SFML needs the X11, OpenGL and udev development headers.
-Debian/Ubuntu: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libudev-dev autoconf automake libtool
-Fedora: sudo dnf install libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel systemd-devel autoconf automake libtool
+SFML needs the X11, OpenGL/GLU and udev development headers.
+Debian/Ubuntu: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libudev-dev autoconf automake libtool
+Fedora: sudo dnf install libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel mesa-libGLU-devel systemd-devel autoconf automake libtool
 PACKAGES
     exit 1
 fi

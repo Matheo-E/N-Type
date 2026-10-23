@@ -1,13 +1,13 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
+#include <map>
 #include <string>
 
-#include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 
 #include "ClientNetwork.hpp"
+#include "World.hpp"
 
 namespace ntype::client {
 
@@ -19,11 +19,14 @@ public:
 private:
     void poll_events();
     std::uint8_t read_input() const;
+    void sync_world();
     void render();
 
     ClientNetwork network_;
     sf::RenderWindow window_;
-    std::array<sf::RectangleShape, 2> squares_;
+    // Engine world mirroring the latest snapshot: one entity per player.
+    World world_;
+    std::map<std::uint16_t, int> entities_; // player id -> engine entity
 };
 
 } // namespace ntype::client

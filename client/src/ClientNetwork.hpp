@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <asio.hpp>
 
@@ -18,20 +19,25 @@ public:
     void update(std::uint8_t input);
     void disconnect();
 
-    const std::optional<protocol::Message>& state() const { return state_; }
+    // Our player id (1 to 4), once the server has accepted us.
+    std::optional<std::uint8_t> id() const { return id_; }
+    // Players from the latest snapshot; each entity id is a player id.
+    const std::vector<protocol::Entity>& players() const { return players_; }
     const std::string& status() const { return status_; }
 
 private:
-    void send(const protocol::Message& message);
-    void receive();
-
     using Clock = std::chrono::steady_clock;
+
+    void send(const std::vector<std::uint8_t>& bytes);
+    void receive();
+    void handle(const std::vector<std::uint8_t>& bytes);
+    void reset();
+
     asio::io_context io_;
     asio::ip::udp::socket socket_;
     asio::ip::udp::endpoint server_;
-    std::uint32_t nonce_;
-    std::uint32_t sequence_ = 0;
-    std::optional<protocol::Message> state_;
+    std::optional<std::uint8_t> id_;
+    std::vector<protocol::Entity> players_;
     std::string status_ = "Connecting";
     Clock::time_point last_received_ = Clock::now();
     Clock::time_point last_connect_{};

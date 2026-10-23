@@ -36,7 +36,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build autoconf automake autoconf-archive libtool \
             libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxext-dev libxrender-dev \
-            libxinerama-dev libudev-dev libgl1-mesa-dev libegl1-mesa-dev
+            libxinerama-dev libudev-dev libgl1-mesa-dev libglu1-mesa-dev libegl1-mesa-dev
 
       - name: Set up MSVC (Windows)
         if: runner.os == 'Windows'
@@ -78,6 +78,9 @@ jobs:
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test the protocol
+        run: ctest --test-dir build/client-${{ matrix.preset }} --output-on-failure
 
       - name: Check executable help
         shell: bash

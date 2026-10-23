@@ -6,13 +6,13 @@
 #include <string>
 #include <string_view>
 
-#include "Protocol.hpp"
+#include "GameConfig.hpp"
 
 namespace ntype {
 
 struct Options {
     std::string host = "127.0.0.1";
-    std::uint16_t port = protocol::kDefaultPort;
+    std::uint16_t port = config::kDefaultPort;
     bool help = false;
 };
 

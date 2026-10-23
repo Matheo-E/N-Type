@@ -1,22 +1,36 @@
 #include "ClientApp.hpp"
 
+#include <algorithm>
+#include <array>
+
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 
+#include "Factory.hpp"
+#include "GameConfig.hpp"
 #include "Protocol.hpp"
+#include "System.hpp"
 
 namespace ntype::client {
 
+namespace {
+
+// One colour per player, indexed by player id - 1.
+const std::array<sf::Color, config::kMaxPlayers> kColors{
+    sf::Color(80, 180, 255), sf::Color(255, 160, 60), sf::Color(110, 220, 110), sf::Color(240, 100, 200)};
+const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange", "green", "pink"};
+
+constexpr std::uint8_t bit(const protocol::InputType key) {
+    return static_cast<std::uint8_t>(key);
+}
+
+} // namespace
+
 ClientApp::ClientApp(const std::string& host, const std::uint16_t port)
     : network_(host, port),
-      window_(sf::VideoMode({protocol::kWidth, protocol::kHeight}), "N-Type | Connecting",
+      window_(sf::VideoMode(config::kWidth, config::kHeight), "N-Type | Connecting",
               sf::Style::Titlebar | sf::Style::Close) {
     window_.setFramerateLimit(60);
-    for (auto& square : squares_) {
-        square.setSize({protocol::kSquareSize, protocol::kSquareSize});
-    }
-    squares_[0].setFillColor(sf::Color(80, 180, 255));
-    squares_[1].setFillColor(sf::Color(255, 160, 60));
 }
 
 void ClientApp::run() {
@@ -27,8 +41,8 @@ void ClientApp::run() {
         }
         network_.update(read_input());
         std::string title = "N-Type | " + network_.status();
-        if (network_.state()) {
-            title += network_.state()->slot == 0 ? " (blue)" : " (orange)";
+        if (const auto id = network_.id()) {
+            title += std::string(" (") + kColorNames[*id - 1U] + ")";
         }
         window_.setTitle(title + " | Arrows/WASD/ZQSD | Esc: quit");
         render();
@@ -37,10 +51,10 @@ void ClientApp::run() {
 }
 
 void ClientApp::poll_events() {
-    while (const auto event = window_.pollEvent()) {
-        const auto* key = event->getIf<sf::Event::KeyPressed>();
-        if (event->is<sf::Event::Closed>() ||
-            (key != nullptr && key->code == sf::Keyboard::Key::Escape)) {
+    sf::Event event{};
+    while (window_.pollEvent(event)) {
+        if (event.type == sf::Event::Closed ||
+            (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)) {
             window_.close();
             return;
         }
@@ -52,36 +66,57 @@ std::uint8_t ClientApp::read_input() const {
         return 0;
     }
     using Key = sf::Keyboard::Key;
+    using protocol::InputType;
     const auto pressed = [](const Key key) { return sf::Keyboard::isKeyPressed(key); };
-    std::uint8_t input = 0;
-    if (pressed(Key::Left) || pressed(Key::A) || pressed(Key::Q)) {
-        input |= protocol::kLeft;
-    }
-    if (pressed(Key::Right) || pressed(Key::D)) {
-        input |= protocol::kRight;
-    }
+    std::uint8_t bits = 0;
     if (pressed(Key::Up) || pressed(Key::W) || pressed(Key::Z)) {
-        input |= protocol::kUp;
+        bits |= bit(InputType::Up);
     }
     if (pressed(Key::Down) || pressed(Key::S)) {
-        input |= protocol::kDown;
+        bits |= bit(InputType::Down);
     }
-    return input;
+    if (pressed(Key::Left) || pressed(Key::A) || pressed(Key::Q)) {
+        bits |= bit(InputType::Left);
+    }
+    if (pressed(Key::Right) || pressed(Key::D)) {
+        bits |= bit(InputType::Right);
+    }
+    if (pressed(Key::Space)) {
+        bits |= bit(InputType::Shoot);
+    }
+    return bits;
+}
+
+void ClientApp::sync_world() {
+    const auto& players = network_.players();
+    // Only players in the latest snapshot keep an entity.
+    for (auto it = entities_.begin(); it != entities_.end();) {
+        const auto id = it->first;
+        if (std::none_of(players.begin(), players.end(), [id](const auto& player) { return player.id == id; })) {
+            world_.Positions.erase(it->second);
+            world_.Rectangles.erase(it->second);
+            it = entities_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (const auto& player : players) {
+        auto [it, added] = entities_.try_emplace(player.id, 0);
+        if (added) {
+            it->second = Create_E(world_);
+            auto& square = world_.Rectangles[it->second].Rect;
+            square.setSize({config::kPlayerSize, config::kPlayerSize});
+            square.setFillColor(kColors[player.id - 1U]);
+        }
+        // The server is authoritative: positions are copied, never simulated here.
+        world_.Positions[it->second].Xy = {static_cast<float>(player.x), static_cast<float>(player.y)};
+    }
 }
 
 void ClientApp::render() {
+    sync_world();
     window_.clear(sf::Color::Black);
-    if (const auto& state = network_.state()) {
-        for (std::size_t slot = 0; slot < squares_.size(); ++slot) {
-            // Only players currently connected to the server are visible.
-            if ((state->bits & (1U << slot)) == 0) {
-                continue;
-            }
-            squares_[slot].setPosition({static_cast<float>(state->positions[slot].x),
-                                        static_cast<float>(state->positions[slot].y)});
-            window_.draw(squares_[slot]);
-        }
-    }
+    Draw(world_, window_);
     window_.display();
 }
 
