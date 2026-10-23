@@ -1,19 +1,6 @@
-# Build trees and vcpkg output
 /build/
 /out/
-/vcpkg_installed/
-# vcpkg checkout fetched by build.sh / build.bat when VCPKG_ROOT is unset
-/vcpkg/
-CMakeUserPresets.json
-
-# IDEs
 /.vscode/
 /.idea/
 /.vs/
 *.swp
-
-# Binaries copied to the root by build.sh / build.bat
-/r-type_server
-/r-type_client
-*.exe
-*.dll
