@@ -26,11 +26,39 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 
 } // namespace
 
-ClientApp::ClientApp(const std::string& host, const std::uint16_t port)
-    : network_(host, port),
-      window_(sf::VideoMode(config::kWidth, config::kHeight), "N-Type | Connecting",
-              sf::Style::Titlebar | sf::Style::Close) {
+ClientApp::ClientApp(const std::string& name, const std::string& host, const std::uint16_t port)
+    : name_(name), network_(host, port) {
+    create_window();
+}
+
+void ClientApp::create_window() {
+    if (fullscreen_) {
+        window_.create(sf::VideoMode::getDesktopMode(), "N-Type | Connecting", sf::Style::Fullscreen);
+    } else {
+        window_.create(sf::VideoMode(config::kWidth, config::kHeight), "N-Type | Connecting",
+                       sf::Style::Default);
+    }
     window_.setFramerateLimit(60);
+    update_view();
+}
+
+void ClientApp::update_view() {
+    const auto size = window_.getSize();
+    if (size.x == 0 || size.y == 0) return;
+    const float window_ratio = static_cast<float>(size.x) / static_cast<float>(size.y);
+    const float game_ratio = static_cast<float>(config::kWidth) / static_cast<float>(config::kHeight);
+    sf::FloatRect viewport(0.f, 0.f, 1.f, 1.f);
+    if (window_ratio > game_ratio) {
+        viewport.width = game_ratio / window_ratio;
+        viewport.left = (1.f - viewport.width) / 2.f;
+    } else {
+        viewport.height = window_ratio / game_ratio;
+        viewport.top = (1.f - viewport.height) / 2.f;
+    }
+    sf::View view(sf::FloatRect(0.f, 0.f, static_cast<float>(config::kWidth),
+                               static_cast<float>(config::kHeight)));
+    view.setViewport(viewport);
+    window_.setView(view);
 }
 
 void ClientApp::run() {
@@ -40,11 +68,11 @@ void ClientApp::run() {
             break;
         }
         network_.update(read_input());
-        std::string title = "N-Type | " + network_.status();
+        std::string title = "N-Type | " + name_ + " | " + network_.status();
         if (const auto id = network_.id()) {
             title += std::string(" (") + kColorNames[*id - 1U] + ")";
         }
-        window_.setTitle(title + " | Arrows/WASD/ZQSD | Esc: quit");
+        window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: quit");
         render();
     }
     network_.disconnect();
@@ -58,6 +86,11 @@ void ClientApp::poll_events() {
             window_.close();
             return;
         }
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
+            fullscreen_ = !fullscreen_;
+            create_window();
+        }
+        if (event.type == sf::Event::Resized) update_view();
     }
 }
 

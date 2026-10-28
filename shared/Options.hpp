@@ -11,6 +11,7 @@
 namespace ntype {
 
 struct Options {
+    std::string name = "Player";
     std::string host = "127.0.0.1";
     std::uint16_t port = config::kDefaultPort;
     bool help = false;
@@ -24,6 +25,11 @@ inline Options parse_options(int argc, char** argv, Application application) {
         const std::string_view arg(argv[index]);
         if (arg == "--help") {
             options.help = true;
+        } else if ((arg == "-n" || arg == "--name") && application == Application::Client && index + 1 < argc) {
+            options.name = argv[++index];
+            if (options.name.empty()) {
+                throw std::invalid_argument("Name must not be empty");
+            }
         } else if (arg == "-h" && application == Application::Client && index + 1 < argc) {
             options.host = argv[++index];
         } else if (arg == "-p" && index + 1 < argc) {
