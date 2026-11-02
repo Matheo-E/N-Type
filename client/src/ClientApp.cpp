@@ -69,8 +69,8 @@ void ClientApp::run() {
         }
         network_.update(read_input());
         std::string title = "N-Type | " + name_ + " | " + network_.status();
-        if (const auto id = network_.id()) {
-            title += std::string(" (") + kColorNames[*id - 1U] + ")";
+        if (const auto& lobby = network_.lobby()) {
+            title += std::string(" (") + kColorNames[lobby->yourSlot - 1U] + ")";
         }
         window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: quit");
         render();
