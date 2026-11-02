@@ -26,6 +26,11 @@ int main(int argc, char** argv) {
         std::signal(SIGINT, on_signal);
         std::signal(SIGTERM, on_signal);
         ntype::server::Server server(options.port);
+#ifndef _WIN32
+        // Started in the background (`&`), reading the terminal would stop the whole
+        // server; ignoring SIGTTIN makes the read fail and the console thread end.
+        std::signal(SIGTTIN, SIG_IGN);
+#endif
         ntype::server::Console console;
         server.set_console(&console);
         server.run(running);

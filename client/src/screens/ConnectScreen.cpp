@@ -32,6 +32,10 @@ void ConnectScreen::submit() {
         error_ = "Please enter a name, host and a valid port.";
         return;
     }
+    if (!is_valid_name(fields_[0].value)) {
+        error_ = kInvalidName; // e.g. a long or accented name given with -n
+        return;
+    }
     error_ = actions_.connect({fields_[0].value, fields_[1].value, static_cast<std::uint16_t>(port)});
 }
 

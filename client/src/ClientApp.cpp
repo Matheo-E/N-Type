@@ -1,6 +1,7 @@
 #include "ClientApp.hpp"
 
 #include <exception>
+#include <stdexcept>
 
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
@@ -66,6 +67,8 @@ std::string ClientApp::connect(const ConnectionSettings& settings) {
     network_.reset(); // Disconnects the previous session, if any.
     try {
         network_ = std::make_unique<ClientNetwork>(settings.host, settings.port, settings.name);
+    } catch (const std::invalid_argument& error) {
+        return error.what();
     } catch (const std::exception&) {
         return "Host not found: " + settings.host;
     }

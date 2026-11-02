@@ -37,9 +37,17 @@ std::string refuse_text(const std::uint8_t reason) {
 
 } // namespace
 
+bool is_valid_name(const std::string& name) {
+    return !name.empty() && name.size() <= protocol::kMaxPlayerName &&
+           std::all_of(name.begin(), name.end(), [](const char c) { return c >= 32 && c <= 126; });
+}
+
 ClientNetwork::ClientNetwork(const std::string& host, const std::uint16_t port, std::string name)
     : name_(std::move(name)), address_(host + ":" + std::to_string(port)),
       socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), 0)), status_("Connecting to " + address_) {
+    if (!is_valid_name(name_)) {
+        throw std::invalid_argument(kInvalidName);
+    }
     asio::ip::udp::resolver resolver(io_);
     server_ = *resolver.resolve(asio::ip::udp::v4(), host, std::to_string(port)).begin();
     socket_.non_blocking(true);
@@ -202,6 +210,9 @@ void ClientNetwork::leave() {
     players_.clear();
     list_received_ = false;
     request([] { return protocol::makeLobbyLeave(); }, [this] { return list_received_; });
+    if (pending_) {
+        pending_->leaving = true;
+    }
 }
 
 void ClientNetwork::rename(const std::string& name) {
@@ -246,7 +257,9 @@ void ClientNetwork::update(const std::uint8_t input) {
     }
     // Sent every frame, so it is also our heartbeat.
     send(protocol::makeInput(input));
-    if (!lobby_ && now - last_list_ >= kListEvery) {
+    // No list request while leaving: only the answer to LobbyLeave may confirm it.
+    const bool leaving = pending_ && pending_->leaving;
+    if (!lobby_ && !leaving && now - last_list_ >= kListEvery) {
         send(protocol::makeLobbyListRequest());
         last_list_ = now;
     }

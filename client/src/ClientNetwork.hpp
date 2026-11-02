@@ -15,11 +15,16 @@ namespace ntype::client {
 
 enum class Phase { Connecting, Browsing, InLobby };
 
+// What the protocol can carry as a player name: 1 to 16 printable ASCII characters.
+bool is_valid_name(const std::string& name);
+inline constexpr const char* kInvalidName = "Names are 1 to 16 characters, without accents.";
+
 // The client's session with the server, from the lobby list into the game.
 // The server re-sends the lobby state; each request here is re-sent until that
 // state shows its effect (or the server refuses it).
 class ClientNetwork {
 public:
+    // Throws std::invalid_argument (kInvalidName) when !is_valid_name(name).
     ClientNetwork(const std::string& host, std::uint16_t port, std::string name);
     ~ClientNetwork();
     // Once per frame: receives, re-sends, and sends `input` (also the heartbeat).
@@ -60,6 +65,7 @@ private:
         bool entering = false;
         Clock::time_point first_sent;
         Clock::time_point last_sent;
+        bool leaving = false; // Confirmed by the LobbyList that answers it
     };
 
     void send(const std::vector<std::uint8_t>& bytes);
