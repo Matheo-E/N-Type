@@ -53,3 +53,4 @@ endfunction()
 
 ntype_add_test(protocol_test tests/protocol/protocol_test.cpp ntype_protocol)
 ntype_add_test(game_test tests/server/game_test.cpp ntype_server_core)
+ntype_add_test(lobby_test tests/server/lobby_test.cpp ntype_server_core)
