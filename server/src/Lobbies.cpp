@@ -22,7 +22,7 @@ Lobby* Lobbies::create(std::string name) {
     if (lobbies_.size() >= protocol::kMaxLobbies) {
         return nullptr;
     }
-    auto code = new_code();
+    std::string code = new_code();
     auto [it, added] = lobbies_.try_emplace(code, code, std::move(name));
     return &it->second;
 }

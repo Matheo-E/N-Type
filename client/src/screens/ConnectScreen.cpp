@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstddef>
 
 #include "Protocol.hpp"
 
@@ -24,9 +25,10 @@ ConnectScreen::ConnectScreen(const ui::Theme& theme, AppActions& actions, const 
 }
 
 void ConnectScreen::submit() {
-    const auto& port_text = fields_[2].value;
+    const std::string& port_text = fields_[2].value;
     unsigned port = 0;
-    const auto result = std::from_chars(port_text.data(), port_text.data() + port_text.size(), port);
+    const std::from_chars_result result =
+        std::from_chars(port_text.data(), port_text.data() + port_text.size(), port);
     if (fields_[0].value.empty() || fields_[1].value.empty() || result.ec != std::errc{} ||
         result.ptr != port_text.data() + port_text.size() || port == 0 || port > 65535) {
         error_ = "Please enter a name, host and a valid port.";
@@ -42,7 +44,8 @@ void ConnectScreen::submit() {
 void ConnectScreen::handle(const sf::Event& event, const sf::Vector2f point) {
     if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Tab) {
         const auto focused = std::find_if(fields_.begin(), fields_.end(), [](const auto& f) { return f.focused; });
-        const auto next = focused == fields_.end() ? 0 : (focused - fields_.begin() + 1) % 3;
+        const std::ptrdiff_t next =
+            focused == fields_.end() ? 0 : (focused - fields_.begin() + 1) % 3;
         for (auto& field : fields_) {
             field.focused = false;
         }

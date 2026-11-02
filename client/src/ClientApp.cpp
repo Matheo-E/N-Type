@@ -42,7 +42,7 @@ void ClientApp::create_window() {
 }
 
 void ClientApp::update_view() {
-    const auto size = window_.getSize();
+    const sf::Vector2u size = window_.getSize();
     if (size.x == 0 || size.y == 0) {
         return;
     }
@@ -82,7 +82,7 @@ ScreenId ClientApp::wanted() const {
     if (network_->phase() == Phase::Browsing) {
         return creating_ ? ScreenId::Create : ScreenId::LobbyList;
     }
-    const auto& lobby = network_->lobby();
+    const std::optional<protocol::LobbyState>& lobby = network_->lobby();
     return lobby->state == protocol::LobbyPhase::Playing ? ScreenId::Game : ScreenId::WaitingRoom;
 }
 
@@ -119,7 +119,7 @@ void ClientApp::run() {
                 creating_ = false;
             }
         }
-        if (const auto id = wanted(); id != current_) {
+        if (const ScreenId id = wanted(); id != current_) {
             show(id);
         }
         screen_->update();
@@ -179,12 +179,12 @@ void ClientApp::poll_events() {
             update_view();
             continue;
         }
-        const auto pixel = event.type == sf::Event::MouseButtonPressed
+        const sf::Vector2i pixel = event.type == sf::Event::MouseButtonPressed
                                ? sf::Vector2i{event.mouseButton.x, event.mouseButton.y}
                                : sf::Mouse::getPosition(window_);
         screen_->handle(event, window_.mapPixelToCoords(pixel));
         // A screen may have changed the phase (e.g. connected); switch before the next event.
-        if (const auto id = wanted(); id != current_) {
+        if (const ScreenId id = wanted(); id != current_) {
             show(id);
         }
     }

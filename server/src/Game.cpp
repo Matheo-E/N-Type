@@ -72,7 +72,7 @@ void Game::step(const float dt) {
     }
     Movement(world_, dt);
     for (const auto& [slot, ship] : ships_) {
-        auto& position = world_.Positions[ship.entity].Xy;
+        sf::Vector2f& position = world_.Positions[ship.entity].Xy;
         position.x = std::clamp(position.x, 0.0F, kMaxX);
         position.y = std::clamp(position.y, 0.0F, kMaxY);
     }
@@ -81,7 +81,7 @@ void Game::step(const float dt) {
 std::vector<protocol::Entity> Game::snapshot() const {
     std::vector<protocol::Entity> entities;
     for (const auto& [slot, ship] : ships_) {
-        const auto& position = world_.Positions.at(ship.entity).Xy;
+        const sf::Vector2f& position = world_.Positions.at(ship.entity).Xy;
         entities.push_back({slot, config::kPlayerKind, static_cast<std::int16_t>(position.x),
                             static_cast<std::int16_t>(position.y)});
     }

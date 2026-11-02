@@ -42,7 +42,7 @@ void draw_label(sf::RenderTarget& target, const Theme& theme, const std::string&
     sf::Text label(sf::String::fromUtf8(text.begin(), text.end()), theme.font, size);
     label.setFillColor(color);
     if (centered) {
-        const auto local = label.getLocalBounds();
+        const sf::FloatRect local = label.getLocalBounds();
         label.setOrigin(local.left + local.width / 2.0F, local.top + local.height / 2.0F);
     }
     label.setPosition(position);
@@ -50,7 +50,7 @@ void draw_label(sf::RenderTarget& target, const Theme& theme, const std::string&
 }
 
 void draw_panel(sf::RenderTarget& target, const Theme& theme, const sf::FloatRect bounds) {
-    auto shape = box(bounds, theme.panel);
+    sf::RectangleShape shape = box(bounds, theme.panel);
     if (theme.panel_texture) {
         shape.setTexture(theme.panel_texture);
         shape.setFillColor(sf::Color::White);
@@ -63,7 +63,7 @@ bool Button::handle(const sf::Event& event, const sf::Vector2f point) const {
 }
 
 void Button::draw(sf::RenderTarget& target, const Theme& theme) const {
-    auto shape = box(bounds, enabled ? style_color(theme, style) : theme.disabled);
+    sf::RectangleShape shape = box(bounds, enabled ? style_color(theme, style) : theme.disabled);
     if (theme.button_texture) {
         shape.setTexture(theme.button_texture);
         shape.setFillColor(enabled ? sf::Color::White : theme.disabled);
@@ -81,7 +81,7 @@ bool TextField::handle(const sf::Event& event, const sf::Vector2f point) {
     if (!focused || event.type != sf::Event::TextEntered) {
         return false;
     }
-    const auto unicode = event.text.unicode;
+    const sf::Uint32 unicode = event.text.unicode;
     if (unicode == 13) {
         return true;
     }
@@ -106,7 +106,7 @@ bool TextField::handle(const sf::Event& event, const sf::Vector2f point) {
 }
 
 void TextField::draw(sf::RenderTarget& target, const Theme& theme) const {
-    auto shape = box(bounds, theme.panel);
+    sf::RectangleShape shape = box(bounds, theme.panel);
     shape.setOutlineThickness(2.0F);
     shape.setOutlineColor(focused ? theme.focus : theme.border);
     target.draw(shape);
@@ -121,7 +121,8 @@ std::size_t ListView::visible_rows() const {
 
 ListEvent ListView::handle(const sf::Event& event, const sf::Vector2f point) {
     if (event.type == sf::Event::MouseWheelScrolled) {
-        const auto max_scroll = rows.size() > visible_rows() ? rows.size() - visible_rows() : 0;
+        const std::size_t max_scroll =
+            rows.size() > visible_rows() ? rows.size() - visible_rows() : 0;
         if (event.mouseWheelScroll.delta < 0 && scroll < max_scroll) {
             ++scroll;
         } else if (event.mouseWheelScroll.delta > 0 && scroll > 0) {
@@ -132,7 +133,7 @@ ListEvent ListView::handle(const sf::Event& event, const sf::Vector2f point) {
     if (!left_click(event) || !bounds.contains(point)) {
         return ListEvent::None;
     }
-    const auto row = scroll + static_cast<std::size_t>((point.y - bounds.top) / row_height);
+    const std::size_t row = scroll + static_cast<std::size_t>((point.y - bounds.top) / row_height);
     if (row >= rows.size()) {
         return ListEvent::None;
     }
@@ -148,11 +149,11 @@ ListEvent ListView::handle(const sf::Event& event, const sf::Vector2f point) {
 }
 
 void ListView::draw(sf::RenderTarget& target, const Theme& theme) const {
-    const auto last = std::min(rows.size(), scroll + visible_rows());
-    for (auto row = scroll; row < last; ++row) {
+    const std::size_t last = std::min(rows.size(), scroll + visible_rows());
+    for (std::size_t row = scroll; row < last; ++row) {
         const sf::FloatRect line{bounds.left, bounds.top + static_cast<float>(row - scroll) * row_height,
                                  bounds.width, row_height - 4.0F};
-        auto shape = box(line, theme.panel);
+        sf::RectangleShape shape = box(line, theme.panel);
         if (selected == row) {
             shape.setOutlineThickness(2.0F);
             shape.setOutlineColor(theme.focus);

@@ -16,12 +16,12 @@ using protocol::MessageType;
 
 namespace {
 
-constexpr auto kConnectRetry = 500ms;
-constexpr auto kNoAnswer = 3s;
-constexpr auto kListEvery = 1s;
-constexpr auto kResend = 250ms;
-constexpr auto kGiveUp = 3s;
-constexpr auto kTimeout = 5s; // The server drops silent clients after 5 s too.
+constexpr std::chrono::milliseconds kConnectRetry = 500ms;
+constexpr std::chrono::seconds kNoAnswer = 3s;
+constexpr std::chrono::seconds kListEvery = 1s;
+constexpr std::chrono::milliseconds kResend = 250ms;
+constexpr std::chrono::seconds kGiveUp = 3s;
+constexpr std::chrono::seconds kTimeout = 5s; // The server drops silent clients after 5 s too.
 
 std::string refuse_text(const std::uint8_t reason) {
     switch (static_cast<protocol::LobbyRefuseReason>(reason)) {
@@ -91,7 +91,7 @@ void ClientNetwork::receive() {
         std::array<std::uint8_t, 1500> bytes{};
         asio::ip::udp::endpoint from;
         std::error_code error;
-        const auto size = socket_.receive_from(asio::buffer(bytes), from, 0, error);
+        const std::size_t size = socket_.receive_from(asio::buffer(bytes), from, 0, error);
         if (error == asio::error::would_block || error == asio::error::try_again) {
             break;
         }
@@ -103,7 +103,7 @@ void ClientNetwork::receive() {
 }
 
 void ClientNetwork::handle(const std::vector<std::uint8_t>& bytes) {
-    const auto packet = protocol::decode(bytes);
+    const std::optional<protocol::Packet> packet = protocol::decode(bytes);
     if (!packet) {
         return;
     }
@@ -182,7 +182,7 @@ void ClientNetwork::request(const std::function<std::vector<std::uint8_t>()>& ma
         error_ = "Invalid name or code";
         return;
     }
-    const auto now = Clock::now();
+    const Clock::time_point now = Clock::now();
     error_.clear();
     pending_ = Pending{bytes, std::move(done), std::move(code), entering, now, now};
     send(bytes);
@@ -235,7 +235,7 @@ void ClientNetwork::reset() {
 
 void ClientNetwork::update(const std::uint8_t input) {
     receive();
-    const auto now = Clock::now();
+    const Clock::time_point now = Clock::now();
     if (connected_ && now - last_received_ > kTimeout) {
         reset();
         status_ = "Connection lost - reconnecting";
@@ -276,7 +276,7 @@ void ClientNetwork::disconnect() {
     if (!connected_) {
         return;
     }
-    const auto message = protocol::makeDisconnect();
+    const std::vector<std::uint8_t> message = protocol::makeDisconnect();
     // UDP can lose a packet; repeat the disconnect, with the server timeout as fallback.
     for (int copy = 0; copy < 3; ++copy) {
         send(message);

@@ -25,7 +25,7 @@ int main()
     Game game;
     game.add_ship(1);
     game.add_ship(3);
-    auto ships = game.snapshot();
+    std::vector<protocol::Entity> ships = game.snapshot();
     assert(ships.size() == 2 && at(ships[0], 1, 100, 150) && at(ships[1], 3, 100, 390));
 
     // Ships move at 300 px/s and only with their own keys.

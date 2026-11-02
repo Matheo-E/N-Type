@@ -16,7 +16,7 @@ void on_signal(int) { running = false; }
 
 int main(int argc, char** argv) {
     try {
-        const auto options = ntype::parse_options(argc, argv, ntype::Application::Server);
+        const ntype::Options options = ntype::parse_options(argc, argv, ntype::Application::Server);
         if (options.help) {
             std::cout << "USAGE: ./r-type_server [-p port]\n"
                          "  -p port   UDP port to listen on (default 4242)\n"

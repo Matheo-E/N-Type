@@ -39,7 +39,8 @@ bool Lobby::join(const ClientId client, std::string name) {
         used[member.slot - 1U] = true;
     }
     const auto slot = static_cast<std::uint8_t>(std::find(used.begin(), used.end(), false) - used.begin() + 1);
-    const auto role = phase_ == LobbyPhase::Playing ? MemberRole::Spectator : MemberRole::Player;
+    const MemberRole role =
+        phase_ == LobbyPhase::Playing ? MemberRole::Spectator : MemberRole::Player;
     members_.push_back({client, std::move(name), slot, role});
     return true;
 }

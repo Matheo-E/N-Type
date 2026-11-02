@@ -7,41 +7,41 @@ int main()
 {
     using namespace protocol;
 
-    auto request = decode(makeConnectRequest("Ann"));
+    std::optional<Packet> request = decode(makeConnectRequest("Ann"));
     assert(request && request->type == MessageType::ConnectRequest && request->text == "Ann");
     assert(!decode({1}));      // the name is required
     assert(makeConnectAccept().size() == 1);
     assert(decode(makeConnectAccept()));
     assert(!decode({2, 1}));   // the old accept carried a player id
-    auto refused = decode(makeConnectRefuse(RefuseReason::ServerFull));
+    std::optional<Packet> refused = decode(makeConnectRefuse(RefuseReason::ServerFull));
     assert(refused && refused->value == 1);
     assert(decode(makeDisconnect()));
 
     uint8_t keys = static_cast<uint8_t>(InputType::Right) |
                    static_cast<uint8_t>(InputType::Shoot);
-    auto input = decode(makeInput(keys));
+    std::optional<Packet> input = decode(makeInput(keys));
     assert(input && input->value == 24);
 
-    auto update = decode(makeEntityUpdate(250, -30, 450));
+    std::optional<Packet> update = decode(makeEntityUpdate(250, -30, 450));
     assert(update && update->id == 250 && update->x == -30 && update->y == 450);
 
-    auto spawn = decode(makeEntitySpawn(251, 2, 800, 200));
+    std::optional<Packet> spawn = decode(makeEntitySpawn(251, 2, 800, 200));
     assert(spawn && spawn->id == 251 && spawn->value == 2 && spawn->x == 800);
 
-    auto destroy = decode(makeEntityDestroy(251));
+    std::optional<Packet> destroy = decode(makeEntityDestroy(251));
     assert(destroy && destroy->id == 251);
 
     std::vector<Entity> entities = {{1, 1, 100, 200}, {251, 2, -30, 450}};
-    auto snapshot = decode(makeWorldSnapshot(entities));
+    std::optional<Packet> snapshot = decode(makeWorldSnapshot(entities));
     assert(snapshot && snapshot->entities.size() == 2);
     assert(snapshot->entities[1].id == 251 && snapshot->entities[1].x == -30);
     assert(decode(makeWorldSnapshot({}))->entities.empty());
 
-    auto event = decode(makePlayerEvent(2, 1));
+    std::optional<Packet> event = decode(makePlayerEvent(2, 1));
     assert(event && event->id == 2 && event->value == 1);
-    auto left = decode(makeClientLeft(2));
+    std::optional<Packet> left = decode(makeClientLeft(2));
     assert(left && left->id == 2);
-    auto state = decode(makeGameStateChange(2));
+    std::optional<Packet> state = decode(makeGameStateChange(2));
     assert(state && state->value == 2);
 
     assert(!decode({}));
@@ -62,7 +62,7 @@ int main()
                                     {"23ZZ", "Bob's lobby", 4, LobbyPhase::Playing}};
     assert(makeLobbyList({infos[0]}) ==
            (std::vector<uint8_t>{14, 1, 'K', '7', 'Q', 'X', 5, 'A', 'l', 'p', 'h', 'a', 2, 1}));
-    auto list = decode(makeLobbyList(infos));
+    std::optional<Packet> list = decode(makeLobbyList(infos));
     assert(list && list->lobbies.size() == 2 && list->lobbies[1].name == "Bob's lobby" &&
            list->lobbies[1].members == 4 && list->lobbies[1].state == LobbyPhase::Playing);
     assert(decode(makeLobbyList({}))->lobbies.empty());
@@ -76,7 +76,7 @@ int main()
     assert(makeLobbyState(sent) == (std::vector<uint8_t>{19, 'K', '7', 'Q', 'X', 5, 'A', 'l', 'p', 'h', 'a',
                                                          2, 2, 1, 2, 1, 1, 3, 'A', 'n', 'n',
                                                          2, 2, 2, 'B', 'o'}));
-    auto lobby = decode(makeLobbyState(sent));
+    std::optional<Packet> lobby = decode(makeLobbyState(sent));
     assert(lobby && lobby->lobby.code == "K7QX" && lobby->lobby.yourSlot == 2 &&
            lobby->lobby.leaderSlot == 1 && lobby->lobby.members.size() == 2 &&
            lobby->lobby.members[1].role == MemberRole::Spectator && lobby->lobby.members[1].name == "Bo");
@@ -95,10 +95,10 @@ int main()
     assert(!decode({16, 'O', '0', 'I', '1'}));    // excluded characters
     assert(!decode({14, 33}));                    // more than 32 lobbies
     assert(!decode({17, 4}));                     // unknown refuse reason
-    auto badRole = makeLobbyState(sent);
+    std::vector<uint8_t> badRole = makeLobbyState(sent);
     badRole[badRole.size() - 4] = 3;              // role of the last member
     assert(!decode(badRole));
-    auto cut = makeLobbyState(sent);
+    std::vector<uint8_t> cut = makeLobbyState(sent);
     cut.pop_back();
     assert(!decode(cut));
 

@@ -27,7 +27,7 @@ void LobbyListScreen::join_selected() {
 }
 
 void LobbyListScreen::handle(const sf::Event& event, const sf::Vector2f point) {
-    const auto list_event = list_.handle(event, point);
+    const ui::ListEvent list_event = list_.handle(event, point);
     if (list_.selected && *list_.selected < codes_.size()) {
         selected_code_ = codes_[*list_.selected];
     }
@@ -46,7 +46,7 @@ void LobbyListScreen::handle(const sf::Event& event, const sf::Vector2f point) {
 }
 
 void LobbyListScreen::update() {
-    const auto& lobbies = network_.lobbies();
+    const std::vector<protocol::LobbyInfo>& lobbies = network_.lobbies();
     list_.rows.clear();
     codes_.clear();
     list_.selected.reset();

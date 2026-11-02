@@ -28,7 +28,7 @@ Server::Server(const std::uint16_t port) : network_(port) {
 
 void Server::run(const std::atomic<bool>& running) {
     const auto step = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<float>(kDt));
-    auto next = Clock::now();
+    Clock::time_point next = Clock::now();
     while (running) {
         tick();
         next += step;
@@ -61,7 +61,7 @@ void Server::tick() {
 }
 
 void Server::handle(const Datagram& datagram) {
-    const auto packet = protocol::decode(datagram.data);
+    const std::optional<protocol::Packet> packet = protocol::decode(datagram.data);
     if (!packet) {
         return; // Malformed: ignored.
     }
@@ -203,7 +203,7 @@ void Server::remove(const asio::ip::udp::endpoint& from, const char* reason) {
 }
 
 void Server::drop_timed_out() {
-    const auto now = Clock::now();
+    const Clock::time_point now = Clock::now();
     std::vector<asio::ip::udp::endpoint> expired;
     for (const auto& [endpoint, client] : clients_) {
         if (now - client.last_seen > kTimeout) {

@@ -123,7 +123,7 @@ void registry()
     assert(lobbies.find(first->code()) == first && lobbies.find("ZZZZ") == nullptr);
     assert(lobbies.lobby_of(10) == first && lobbies.lobby_of(11) == nullptr);
     lobbies.remove_empty();
-    auto list = lobbies.list();
+    std::vector<protocol::LobbyInfo> list = lobbies.list();
     assert(list.size() == 1 && list[0].name == "First" && list[0].members == 1);
 }
 

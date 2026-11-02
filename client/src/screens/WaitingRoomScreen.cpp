@@ -10,7 +10,7 @@ WaitingRoomScreen::WaitingRoomScreen(const ui::Theme& theme, ClientNetwork& netw
       start_{"Start", {760, 594, 440, 56}}, leave_{"Leave", {80, 594, 240, 56}, ui::Style::Danger} {}
 
 void WaitingRoomScreen::rename() {
-    const auto& lobby = network_.lobby();
+    const std::optional<protocol::LobbyState>& lobby = network_.lobby();
     if (lobby && !name_.value.empty() && name_.value != lobby->name) {
         network_.rename(name_.value);
     }
@@ -33,7 +33,7 @@ void WaitingRoomScreen::handle(const sf::Event& event, const sf::Vector2f point)
 }
 
 void WaitingRoomScreen::update() {
-    const auto& lobby = network_.lobby();
+    const std::optional<protocol::LobbyState>& lobby = network_.lobby();
     if (!lobby) {
         return;
     }
@@ -48,7 +48,7 @@ void WaitingRoomScreen::update() {
 }
 
 void WaitingRoomScreen::draw(sf::RenderWindow& window) {
-    const auto& lobby = network_.lobby();
+    const std::optional<protocol::LobbyState>& lobby = network_.lobby();
     if (!lobby) {
         return;
     }
@@ -59,7 +59,7 @@ void WaitingRoomScreen::draw(sf::RenderWindow& window) {
     ui::draw_label(window, theme_, "Players " + std::to_string(lobby->members.size()) + "/4", {82, 250},
                    theme_.text_size, theme_.muted);
     for (std::size_t i = 0; i < lobby->members.size(); ++i) {
-        const auto& member = lobby->members[i];
+        const protocol::LobbyMember& member = lobby->members[i];
         const sf::FloatRect row{80, 290 + static_cast<float>(i) * 64.0F, 600, 56};
         ui::draw_panel(window, theme_, row);
         sf::RectangleShape square({36, 36});

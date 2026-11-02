@@ -56,7 +56,7 @@ private:
         asio::ip::udp::endpoint from;
         while (!stop_) {
             std::error_code error;
-            const auto size = socket_.receive_from(asio::buffer(bytes), from, 0, error);
+            const std::size_t size = socket_.receive_from(asio::buffer(bytes), from, 0, error);
             if (error || size == 0) {
                 std::this_thread::sleep_for(1ms);
                 continue;
@@ -87,7 +87,8 @@ private:
 // Updates the clients like the game loop would, until `done` or the timeout.
 bool pump(std::initializer_list<ClientNetwork*> clients, const std::function<bool()>& done,
           std::chrono::milliseconds timeout = 2000ms) {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    const std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
         for (auto* client : clients) {
             client->update(0);
@@ -111,7 +112,7 @@ std::string lower(std::string text) {
 
 int main() {
     auto running = std::make_unique<RunningServer>(0);
-    const auto port = running->server.port();
+    const std::uint16_t port = running->server.port();
 
     // Names the protocol cannot carry are refused up front, not thrown later from update().
     for (const char* name : {"Math\xC3\xA9o", "Seventeen_letters", ""}) {
@@ -126,14 +127,14 @@ int main() {
     ClientNetwork a("127.0.0.1", port, "Ann");
     ClientNetwork b("127.0.0.1", port, "Bo");
     ClientNetwork c("127.0.0.1", port, "Cy");
-    const auto all = {&a, &b, &c};
+    const std::initializer_list<ClientNetwork*> all = {&a, &b, &c};
     assert(pump(all, [&] { return a.phase() == Phase::Browsing && b.phase() == Phase::Browsing &&
                                   c.phase() == Phase::Browsing; }));
 
     a.create("Alpha");
     assert(pump(all, [&] { return a.phase() == Phase::InLobby; }));
     assert(a.is_leader() && a.lobby()->code.size() == 4 && !a.busy());
-    const auto code = a.lobby()->code;
+    const std::string code = a.lobby()->code;
     assert(pump(all, [&] { return !b.lobbies().empty() && b.lobbies()[0].name == "Alpha"; }));
 
     b.join(lower(code));
@@ -174,11 +175,11 @@ int main() {
     {
         Relay relay(port);
         ClientNetwork d("127.0.0.1", relay.port(), "Di");
-        const auto clients = {&a, &b, &c, &d};
+        const std::initializer_list<ClientNetwork*> clients = {&a, &b, &c, &d};
         assert(pump(clients, [&] { return d.phase() == Phase::Browsing; }));
         d.create("Delta");
         assert(pump(clients, [&] { return d.phase() == Phase::InLobby; }));
-        const auto delta = d.lobby()->code;
+        const std::string delta = d.lobby()->code;
         const auto listed = [&] {
             return std::any_of(c.lobbies().begin(), c.lobbies().end(),
                                [&](const protocol::LobbyInfo& lobby) { return lobby.code == delta; });
