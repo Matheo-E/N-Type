@@ -44,6 +44,12 @@ and port, then select **Connect** to open the game. Command-line values are used
 as the form defaults. The window can be freely resized or maximized; press **F11**
 to enter or leave fullscreen mode. The game window has the same controls. Both
 windows preserve their aspect ratio so text and graphics are never stretched.
+After the connection form, the client displays a lobby browser: join the local
+lobby on the left, or create one on the right by choosing its name, capacity and
+one of three map previews. This is currently a UI preview over the single game
+server; lobby isolation and real map loading are not part of the network protocol yet.
+Multiplayer rooms only enable **Enter game** once their displayed capacity is full.
+Use **Play solo** to start immediately without creating a lobby.
 
 On another computer, replace `127.0.0.1` with the **server computer's IPv4 address**.
 Windows uses `r-type_server.exe` and `r-type_client.exe` with the same arguments.
