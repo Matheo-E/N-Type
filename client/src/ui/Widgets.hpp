@@ -19,8 +19,8 @@ namespace ntype::client::ui {
 enum class Style { Primary, Secondary, Danger };
 
 struct Button {
-    std::string label;
-    sf::FloatRect bounds;
+    std::string label{};
+    sf::FloatRect bounds{};
     Style style = Style::Primary;
     bool enabled = true;
 
@@ -35,8 +35,8 @@ enum class Filter {
 };
 
 struct TextField {
-    sf::FloatRect bounds;
-    std::string value;
+    sf::FloatRect bounds{};
+    std::string value{};
     std::size_t max_length = 16;
     Filter filter = Filter::Printable;
     bool focused = false;
@@ -49,11 +49,11 @@ struct TextField {
 enum class ListEvent { None, Selected, Activated };
 
 struct ListView {
-    sf::FloatRect bounds;
+    sf::FloatRect bounds{};
     float row_height = 48.0F;
-    std::vector<std::vector<std::string>> rows;
-    std::vector<float> columns; // x offset of each column inside the row
-    std::optional<std::size_t> selected;
+    std::vector<std::vector<std::string>> rows{};
+    std::vector<float> columns{}; // x offset of each column inside the row
+    std::optional<std::size_t> selected{};
     std::size_t scroll = 0;     // first visible row
 
     // A click selects a row; a second click on it within 400 ms activates it.
@@ -62,8 +62,8 @@ struct ListView {
     std::size_t visible_rows() const;
 
     // Double-click detection (internal).
-    sf::Clock since_click;
-    std::optional<std::size_t> clicked;
+    sf::Clock since_click{};
+    std::optional<std::size_t> clicked{};
 };
 
 void draw_label(sf::RenderTarget& target, const Theme& theme, const std::string& text, sf::Vector2f position,

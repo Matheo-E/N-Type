@@ -1,36 +1,42 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
-#include <string>
+#include <memory>
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
 #include "ClientNetwork.hpp"
-#include "World.hpp"
+#include "screens/Screen.hpp"
+#include "ui/Theme.hpp"
 
 namespace ntype::client {
 
+// The only window: shows the screen that matches the session's phase, from
+// the connection page through the lobbies into the game.
 class ClientApp {
 public:
-    ClientApp(const std::string& name, const std::string& host, std::uint16_t port);
+    explicit ClientApp(ConnectionSettings defaults);
     void run();
 
 private:
-    std::string name_;
-    void poll_events();
-    std::uint8_t read_input() const;
-    void sync_world();
-    void render();
     void create_window();
     void update_view();
+    void poll_events();
+    void on_escape();
+    std::uint8_t read_input() const;
+    ScreenId wanted() const;
+    void show(ScreenId id);
+    std::string connect(const ConnectionSettings& settings);
 
-    ClientNetwork network_;
+    ui::Theme theme_;
+    ConnectionSettings settings_;
+    std::unique_ptr<ClientNetwork> network_;
+    AppActions actions_;
+    bool creating_ = false;
     sf::RenderWindow window_;
     bool fullscreen_ = false;
-    // Engine world mirroring the latest snapshot: one entity per player.
-    World world_;
-    std::map<std::uint16_t, int> entities_; // player id -> engine entity
+    ScreenId current_ = ScreenId::Connect;
+    std::unique_ptr<Screen> screen_;
 };
 
 } // namespace ntype::client
