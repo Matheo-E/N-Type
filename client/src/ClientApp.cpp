@@ -11,6 +11,7 @@
 #include "screens/CreateScreen.hpp"
 #include "screens/GameScreen.hpp"
 #include "screens/LobbyListScreen.hpp"
+#include "screens/WaitingRoomScreen.hpp"
 
 namespace ntype::client {
 
@@ -78,7 +79,8 @@ ScreenId ClientApp::wanted() const {
     if (network_->phase() == Phase::Browsing) {
         return creating_ ? ScreenId::Create : ScreenId::LobbyList;
     }
-    return ScreenId::Game;
+    const auto& lobby = network_->lobby();
+    return lobby->state == protocol::LobbyPhase::Playing ? ScreenId::Game : ScreenId::WaitingRoom;
 }
 
 void ClientApp::show(const ScreenId id) {
@@ -94,6 +96,8 @@ void ClientApp::show(const ScreenId id) {
         screen_ = std::make_unique<CreateScreen>(theme_, actions_, *network_);
         break;
     case ScreenId::WaitingRoom:
+        screen_ = std::make_unique<WaitingRoomScreen>(theme_, *network_);
+        break;
     case ScreenId::Game:
         screen_ = std::make_unique<GameScreen>(theme_, *network_);
         break;

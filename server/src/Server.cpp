@@ -224,6 +224,9 @@ void Server::run_command(const std::string& line) {
     std::string command;
     std::string code;
     words >> command >> code;
+    if (command.empty()) {
+        return; // Blank line.
+    }
     std::transform(code.begin(), code.end(), code.begin(),
                    [](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
     Lobby* lobby = lobbies_.find(code);

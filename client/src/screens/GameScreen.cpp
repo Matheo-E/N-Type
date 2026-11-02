@@ -40,6 +40,13 @@ void GameScreen::sync_world() {
 void GameScreen::draw(sf::RenderWindow& window) {
     sync_world();
     Draw(world_, window);
+    if (network_.is_spectator()) {
+        const sf::FloatRect banner{ui::kMenuWidth / 2.0F - 330, 20, 660, 52};
+        ui::draw_panel(window, theme_, banner);
+        ui::draw_label(window, theme_, "Spectating \xE2\x80\x94 you'll join at the next level",
+                       {banner.left + banner.width / 2.0F, banner.top + banner.height / 2.0F}, theme_.text_size,
+                       theme_.text, true);
+    }
     ui::draw_label(window, theme_, "Esc: leave the lobby", {ui::kMenuWidth - 200, 12}, theme_.small_size,
                    theme_.muted);
 }

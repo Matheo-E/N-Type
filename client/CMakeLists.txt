@@ -14,6 +14,7 @@ add_executable(r-type_client
     src/screens/CreateScreen.cpp
     src/screens/GameScreen.cpp
     src/screens/LobbyListScreen.cpp
+    src/screens/WaitingRoomScreen.cpp
 )
 target_link_libraries(r-type_client PRIVATE ntype_client_core)
 
