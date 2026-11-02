@@ -1,6 +1,8 @@
 # Everything but the window code, shared by the executable and the tests.
 add_library(ntype_client_core STATIC
     src/ClientNetwork.cpp
+    src/ui/Theme.cpp
+    src/ui/Widgets.cpp
 )
 target_include_directories(ntype_client_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(ntype_client_core PUBLIC ntype_shared ntype_engine)
