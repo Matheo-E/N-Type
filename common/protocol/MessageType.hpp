@@ -23,11 +23,37 @@ enum class MessageType : uint8_t {
     PlayerEvent = 10,
     ClientLeft = 11,
     GameStateChange = 12,
+    LobbyListRequest = 13,
+    LobbyList = 14,
+    LobbyCreate = 15,
+    LobbyJoin = 16,
+    LobbyRefuse = 17,
+    LobbyLeave = 18,
+    LobbyState = 19,
+    LobbyRename = 20,
+    LobbySetMap = 21,
+    LobbyStart = 22,
 };
 
 enum class RefuseReason : uint8_t {
     ServerFull = 1,
     ServerError = 2
+};
+
+enum class LobbyRefuseReason : uint8_t {
+    NotFound = 1,
+    Full = 2,
+    TooManyLobbies = 3
+};
+
+enum class LobbyPhase : uint8_t {
+    Waiting = 1,
+    Playing = 2
+};
+
+enum class MemberRole : uint8_t {
+    Player = 1,
+    Spectator = 2
 };
 
 enum class InputType : uint8_t {
