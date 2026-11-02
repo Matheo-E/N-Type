@@ -5,26 +5,15 @@
 #include <iostream>
 #include <thread>
 
-#include "Factory.hpp"
-#include "System.hpp"
-
 namespace ntype::server {
 
 namespace {
 
-using protocol::InputType;
 using protocol::MessageType;
 
 constexpr int kTickRate = 60;
 constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
-
-constexpr float kMaxX = static_cast<float>(config::kWidth) - config::kPlayerSize;
-constexpr float kMaxY = static_cast<float>(config::kHeight) - config::kPlayerSize;
-
-bool pressed(const std::uint8_t keys, const InputType key) {
-    return (keys & static_cast<std::uint8_t>(key)) != 0;
-}
 
 } // namespace
 
@@ -48,7 +37,7 @@ void Server::tick() {
         handle(datagram);
     }
     drop_timed_out();
-    move_players();
+    game_.step(kDt);
     broadcast_snapshot();
     ++tick_;
 }
@@ -72,7 +61,7 @@ void Server::handle(const Datagram& datagram) {
 
     switch (packet->type) {
     case MessageType::Input:
-        player.input = packet->value;
+        game_.set_input(player.id, packet->value);
         break;
     case MessageType::Disconnect:
         remove(datagram.from, "disconnected");
@@ -102,9 +91,7 @@ void Server::on_connect(const asio::ip::udp::endpoint& from) {
 
     Player player;
     player.id = id;
-    player.entity = Create_E(world_);
-    world_.Positions[player.entity].Xy = {100.0F, 150.0F + 120.0F * static_cast<float>(id - 1)};
-    world_.Velocities[player.entity];
+    game_.add_ship(id);
     player.last_seen = Clock::now();
     players_.emplace(from, player);
 
@@ -118,8 +105,7 @@ void Server::remove(const asio::ip::udp::endpoint& from, const char* reason) {
         return;
     }
     const auto id = it->second.id;
-    world_.Positions.erase(it->second.entity);
-    world_.Velocities.erase(it->second.entity);
+    game_.remove_ship(id);
     players_.erase(it);
     broadcast(protocol::makeClientLeft(id));
     std::cout << "[server] player " << int(id) << ' ' << reason << std::endl;
@@ -138,32 +124,6 @@ void Server::drop_timed_out() {
     }
 }
 
-void Server::move_players() {
-    for (auto& [endpoint, player] : players_) {
-        float dx = 0.0F;
-        float dy = 0.0F;
-        if (pressed(player.input, InputType::Up)) {
-            dy -= 1.0F;
-        }
-        if (pressed(player.input, InputType::Down)) {
-            dy += 1.0F;
-        }
-        if (pressed(player.input, InputType::Left)) {
-            dx -= 1.0F;
-        }
-        if (pressed(player.input, InputType::Right)) {
-            dx += 1.0F;
-        }
-        world_.Velocities[player.entity].Xy = {dx * config::kPlayerSpeed, dy * config::kPlayerSpeed};
-    }
-    Movement(world_, kDt);
-    for (const auto& [endpoint, player] : players_) {
-        auto& position = world_.Positions[player.entity].Xy;
-        position.x = std::clamp(position.x, 0.0F, kMaxX);
-        position.y = std::clamp(position.y, 0.0F, kMaxY);
-    }
-}
-
 void Server::broadcast(const std::vector<std::uint8_t>& data) {
     for (const auto& [endpoint, player] : players_) {
         network_.send(endpoint, data);
@@ -175,13 +135,7 @@ void Server::broadcast_snapshot() {
         return;
     }
     // Each player is an entity whose id is its player id.
-    std::vector<protocol::Entity> entities;
-    for (const auto& [endpoint, player] : players_) {
-        const auto& position = world_.Positions[player.entity].Xy;
-        entities.push_back({player.id, config::kPlayerKind, static_cast<std::int16_t>(position.x),
-                            static_cast<std::int16_t>(position.y)});
-    }
-    broadcast(protocol::makeWorldSnapshot(entities));
+    broadcast(protocol::makeWorldSnapshot(game_.snapshot()));
 }
 
 } // namespace ntype::server

@@ -6,19 +6,17 @@
 #include <map>
 #include <vector>
 
+#include "Game.hpp"
 #include "GameConfig.hpp"
 #include "NetworkThread.hpp"
 #include "Protocol.hpp"
-#include "World.hpp"
 
 namespace ntype::server {
 
 using Clock = std::chrono::steady_clock;
 
 struct Player {
-    std::uint8_t id = 0; // 1 to 4
-    int entity = 0;      // Position and velocity live in the engine world.
-    std::uint8_t input = 0;
+    std::uint8_t id = 0; // 1 to 4, also the ship's slot in the game
     Clock::time_point last_seen;
 };
 
@@ -38,12 +36,11 @@ private:
     void on_connect(const asio::ip::udp::endpoint& from);
     void remove(const asio::ip::udp::endpoint& from, const char* reason);
     void drop_timed_out();
-    void move_players();
     void broadcast(const std::vector<std::uint8_t>& data);
     void broadcast_snapshot();
 
     NetworkThread network_;
-    World world_;
+    Game game_;
     std::map<asio::ip::udp::endpoint, Player> players_;
     std::uint32_t tick_ = 0;
 };
