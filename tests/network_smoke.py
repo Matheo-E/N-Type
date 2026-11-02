@@ -10,7 +10,7 @@ import time
 CONNECT, ACCEPT, REFUSE, DISCONNECT, INPUT = 1, 2, 3, 4, 5
 SNAPSHOT, CLIENT_LEFT = 9, 11
 LIST_REQUEST, LIST, CREATE, JOIN, LOBBY_REFUSE, LEAVE = 13, 14, 15, 16, 17, 18
-STATE, RENAME, SET_MAP, START = 19, 20, 21, 22
+STATE, RENAME, START = 19, 20, 21
 UP, DOWN, LEFT, RIGHT = 1, 2, 4, 8
 PLAYER_KIND = 1
 WAITING, PLAYING = 1, 2
@@ -43,22 +43,20 @@ def parse(kind, payload):
         for _ in range(payload[0]):
             code = payload[pos:pos + 4].decode()
             name, pos = read_string(payload, pos + 4)
-            lobbies.append(dict(code=code, name=name, map=payload[pos], members=payload[pos + 1],
-                                state=payload[pos + 2]))
-            pos += 3
+            lobbies.append(dict(code=code, name=name, members=payload[pos], state=payload[pos + 1]))
+            pos += 2
         return lobbies
     if kind == STATE:
         code = payload[0:4].decode()
         name, pos = read_string(payload, 4)
-        lobby_map, state, your, leader, count = payload[pos:pos + 5]
-        pos += 5
+        state, your, leader, count = payload[pos:pos + 4]
+        pos += 4
         members = []
         for _ in range(count):
             slot, role = payload[pos:pos + 2]
             member_name, pos = read_string(payload, pos + 2)
             members.append((slot, role, member_name))
-        return dict(code=code, name=name, map=lobby_map, state=state, your=your, leader=leader,
-                    members=members)
+        return dict(code=code, name=name, state=state, your=your, leader=leader, members=members)
     return None
 
 
@@ -150,23 +148,23 @@ def check(binary):
         # 1. Malformed packets and requests from unknown endpoints create nothing.
         stranger.socket.send(b'garbage')
         stranger.send(CONNECT, bytes([0]))  # empty name
-        stranger.send(CREATE, string('Ghost') + bytes([0]))
+        stranger.send(CREATE, string('Ghost'))
         time.sleep(0.2)
         a.send(LIST_REQUEST)
         assert a.wait(LIST) == []
 
         # 2. Creating a lobby makes you its leader.
-        a.send(CREATE, string('Alpha') + bytes([1]))
+        a.send(CREATE, string('Alpha'))
         alpha = a.wait(STATE)
         code = alpha['code']
-        assert len(code) == 4 and alpha['name'] == 'Alpha' and alpha['map'] == 1
+        assert len(code) == 4 and alpha['name'] == 'Alpha'
         assert alpha['state'] == WAITING and alpha['members'] == [(1, PLAYER, 'Ann')]
         assert alpha['your'] == 1 and alpha['leader'] == 1
 
         # 3. The lobby is listed, and can be joined by code.
         b.connect('Bo')
         b.send(LIST_REQUEST)
-        assert b.wait(LIST) == [dict(code=code, name='Alpha', map=1, members=1, state=WAITING)]
+        assert b.wait(LIST) == [dict(code=code, name='Alpha', members=1, state=WAITING)]
         b.send(JOIN, code.encode())
         joined = b.wait(STATE)
         assert joined['your'] == 2 and joined['leader'] == 1 and len(joined['members']) == 2
@@ -174,7 +172,7 @@ def check(binary):
         # 4. A member asking for another lobby stays where it is; unknown codes are refused.
         b.send(JOIN, b'ZZZZ')
         assert b.wait(STATE)['code'] == code
-        b.send(CREATE, string('Other') + bytes([0]))
+        b.send(CREATE, string('Other'))
         assert b.wait(STATE)['code'] == code
         b.send(LIST_REQUEST)
         assert len(b.wait(LIST)) == 1
@@ -228,7 +226,7 @@ def check(binary):
         c.send(START)  # C is now alone in Beta, with slot 3
         c.wait(STATE, lambda s: s['state'] == PLAYING and s['leader'] == 3)
         d.connect('Di')
-        d.send(CREATE, string('Delta') + bytes([0]))
+        d.send(CREATE, string('Delta'))
         delta = d.wait(STATE)['code']
         e.connect('Ed')
         e.send(JOIN, delta.encode())

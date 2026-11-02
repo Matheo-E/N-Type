@@ -18,12 +18,12 @@ std::string Lobbies::new_code() {
     return code;
 }
 
-Lobby* Lobbies::create(std::string name, const std::uint8_t map) {
+Lobby* Lobbies::create(std::string name) {
     if (lobbies_.size() >= protocol::kMaxLobbies) {
         return nullptr;
     }
     auto code = new_code();
-    auto [it, added] = lobbies_.try_emplace(code, code, std::move(name), map);
+    auto [it, added] = lobbies_.try_emplace(code, code, std::move(name));
     return &it->second;
 }
 

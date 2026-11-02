@@ -31,8 +31,7 @@ enum class MessageType : uint8_t {
     LobbyLeave = 18,
     LobbyState = 19,
     LobbyRename = 20,
-    LobbySetMap = 21,
-    LobbyStart = 22,
+    LobbyStart = 21,
 };
 
 enum class RefuseReason : uint8_t {

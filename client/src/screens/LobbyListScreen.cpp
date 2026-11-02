@@ -7,7 +7,7 @@ namespace ntype::client {
 
 namespace {
 
-constexpr std::array<const char*, 5> kHeaders{"Lobby", "Code", "Players", "Map", "State"};
+constexpr std::array<const char*, 4> kHeaders{"Lobby", "Code", "Players", "State"};
 
 } // namespace
 
@@ -17,7 +17,7 @@ LobbyListScreen::LobbyListScreen(const ui::Theme& theme, AppActions& actions, Cl
       code_{{880, 280, 200, 56}, "", protocol::kCodeLength, ui::Filter::Code},
       join_code_{"Join", {1090, 280, 110, 56}},
       create_{"Create lobby", {880, 400, 320, 56}, ui::Style::Secondary} {
-    list_.columns = {0, 330, 430, 540, 640};
+    list_.columns = {0, 400, 520, 640};
 }
 
 void LobbyListScreen::join_selected() {
@@ -54,8 +54,7 @@ void LobbyListScreen::update() {
         if (lobby.code == selected_code_) {
             list_.selected = list_.rows.size();
         }
-        const char* map = lobby.map < ui::kMapNames.size() ? ui::kMapNames[lobby.map] : "?";
-        list_.rows.push_back({lobby.name, lobby.code, std::to_string(lobby.members) + "/4", map,
+        list_.rows.push_back({lobby.name, lobby.code, std::to_string(lobby.members) + "/4",
                               lobby.state == protocol::LobbyPhase::Playing ? "Playing" : "Waiting"});
         codes_.push_back(lobby.code);
     }

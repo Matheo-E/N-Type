@@ -2,8 +2,8 @@
 
 Each player starts the client, chooses a name, then creates a lobby or joins one.
 One UDP server hosts up to 32 lobbies; **each lobby runs its own game** for up to
-four players. The creator leads the lobby: they rename it, choose the map (maps are
-placeholders for now) and start the game. The server computes all movement; clients
+four players. The creator leads the lobby: they rename it and start the game (the map
+follows the level: level 1 plays map 1, and so on). The server computes all movement; clients
 send keys and display server positions.
 
 ## Build
@@ -49,12 +49,12 @@ Allow inbound **UDP 4242** on the server firewall. Internet hosting also require
 appropriate router/hosting configuration; a LAN address is only reachable on that LAN.
 
 1. **Connect** — name (1–16 characters), host and port, then Continue.
-2. **Lobbies** — the list shows every lobby (name, room code, players `n/4`, map,
+2. **Lobbies** — the list shows every lobby (name, room code, players `n/4`,
    Waiting or Playing). Double-click one or use "Join selected", type a 4-character
    **room code** and press Join, or press "Create lobby".
-3. **Create** — lobby name (prefilled "<name>'s lobby") and map; you become the leader.
-4. **Waiting room** — shows the room code, the members and the map. The leader can
-   rename the lobby, change the map and press Start; anyone can Leave.
+3. **Create** — lobby name (prefilled "<name>'s lobby"); you become the leader.
+4. **Waiting room** — shows the room code and the members. The leader can rename
+   the lobby and press Start; anyone can Leave.
 5. **Game** — move your square with arrows, WASD or ZQSD. Space sends "fire" (not
    used by the server yet).
 
@@ -90,7 +90,7 @@ server's terminal (the code is the lobby's room code):
 | [NetworkThread.cpp](server/src/NetworkThread.cpp) | UDP socket, receives and sends on its own thread |
 | [ThreadSafeQueue.hpp](server/src/ThreadSafeQueue.hpp) | Hands received packets from the network thread to the game thread |
 | [Protocol.cpp](common/protocol/Protocol.cpp) | Binary encoding and decoding of every message ([PROTOCOL_v2.md](docs/PROTOCOL_v2.md)) |
-| [GameConfig.hpp](shared/GameConfig.hpp) | Settings both sides agree on: port, world size, speed, player, client and map counts |
+| [GameConfig.hpp](shared/GameConfig.hpp) | Settings both sides agree on: port, world size, speed, player and client counts |
 | [Options.hpp](shared/Options.hpp) | Shared command-line parsing |
 
 The server uses **two threads**: a network thread runs Asio and queues every received
@@ -120,8 +120,8 @@ then the payload, little-endian. This demo uses these messages:
 | 13 LobbyListRequest / 14 LobbyList | Both | The list of lobbies |
 | 15 LobbyCreate / 16 LobbyJoin / 18 LobbyLeave | Client → Server | Create, join by room code, leave |
 | 17 LobbyRefuse | Server → Client | NotFound, Full or TooManyLobbies |
-| 19 LobbyState | Server → Client | Your lobby: code, name, map, state, members, leader, your slot |
-| 20 LobbyRename / 21 LobbySetMap / 22 LobbyStart | Client → Server | Leader actions |
+| 19 LobbyState | Server → Client | Your lobby: code, name, state, members, leader, your slot |
+| 20 LobbyRename / 21 LobbyStart | Client → Server | Leader actions |
 
 Messages 6–8, 10 and 12 (entity spawn/update/destroy, player events, game state) are
 not used yet. Keys: up=1, down=2, left=4, right=8, shoot=16. Slots 1–4 are blue,

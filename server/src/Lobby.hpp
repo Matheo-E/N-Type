@@ -24,7 +24,7 @@ struct Member {
 // what it builds. Members are kept in arrival order; the first one leads.
 class Lobby {
 public:
-    Lobby(std::string code, std::string name, std::uint8_t map);
+    Lobby(std::string code, std::string name);
 
     const std::string& code() const { return code_; }
     protocol::LobbyPhase phase() const { return phase_; }
@@ -39,7 +39,6 @@ public:
     void leave(ClientId client);
     // Leader only, while waiting.
     bool rename(ClientId by, std::string name);
-    bool set_map(ClientId by, std::uint8_t map);
     bool start(ClientId by);
 
     // Called by the game when a level starts: spectators get a ship.
@@ -61,7 +60,6 @@ private:
 
     std::string code_;
     std::string name_;
-    std::uint8_t map_ = 0;
     protocol::LobbyPhase phase_ = protocol::LobbyPhase::Waiting;
     std::vector<Member> members_;
     std::optional<Game> game_; // Only while playing.

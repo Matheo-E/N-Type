@@ -228,18 +228,16 @@ std::vector<uint8_t> makeLobbyList(const std::vector<LobbyInfo>& lobbies)
     for (const LobbyInfo& lobby : lobbies) {
         writeCode(data, lobby.code);
         writeString(data, lobby.name, kMaxLobbyName);
-        data.push_back(lobby.map);
         data.push_back(lobby.members);
         data.push_back(static_cast<uint8_t>(lobby.state));
     }
     return data;
 }
 
-std::vector<uint8_t> makeLobbyCreate(const std::string& name, uint8_t map)
+std::vector<uint8_t> makeLobbyCreate(const std::string& name)
 {
     std::vector<uint8_t> data = {messageId(MessageType::LobbyCreate)};
     writeString(data, name, kMaxLobbyName);
-    data.push_back(map);
     return data;
 }
 
@@ -268,7 +266,6 @@ std::vector<uint8_t> makeLobbyState(const LobbyState& lobby)
     std::vector<uint8_t> data = {messageId(MessageType::LobbyState)};
     writeCode(data, lobby.code);
     writeString(data, lobby.name, kMaxLobbyName);
-    data.push_back(lobby.map);
     data.push_back(static_cast<uint8_t>(lobby.state));
     data.push_back(lobby.yourSlot);
     data.push_back(lobby.leaderSlot);
@@ -286,11 +283,6 @@ std::vector<uint8_t> makeLobbyRename(const std::string& name)
     std::vector<uint8_t> data = {messageId(MessageType::LobbyRename)};
     writeString(data, name, kMaxLobbyName);
     return data;
-}
-
-std::vector<uint8_t> makeLobbySetMap(uint8_t map)
-{
-    return {messageId(MessageType::LobbySetMap), map};
 }
 
 std::vector<uint8_t> makeLobbyStart()
@@ -404,7 +396,6 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
                 LobbyInfo lobby;
                 lobby.code = reader.code();
                 lobby.name = reader.string(kMaxLobbyName);
-                lobby.map = reader.byte();
                 lobby.members = reader.byteIn(1, static_cast<uint8_t>(kMaxMembers));
                 lobby.state = static_cast<LobbyPhase>(reader.byteIn(1, 2));
                 packet.lobbies.push_back(lobby);
@@ -418,8 +409,6 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
         case MessageType::LobbyRename: {
             Reader reader{data};
             packet.text = reader.string(kMaxLobbyName);
-            if (packet.type == MessageType::LobbyCreate)
-                packet.value = reader.byte();
             if (!reader.done())
                 return std::nullopt;
             break;
@@ -444,7 +433,6 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
             LobbyState& lobby = packet.lobby;
             lobby.code = reader.code();
             lobby.name = reader.string(kMaxLobbyName);
-            lobby.map = reader.byte();
             lobby.state = static_cast<LobbyPhase>(reader.byteIn(1, 2));
             lobby.yourSlot = reader.byteIn(1, 4);
             lobby.leaderSlot = reader.byteIn(1, 4);
@@ -460,12 +448,6 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
                 return std::nullopt;
             break;
         }
-
-        case MessageType::LobbySetMap:
-            if (data.size() != 2)
-                return std::nullopt;
-            packet.value = data[1];
-            break;
 
         default:
             return std::nullopt;

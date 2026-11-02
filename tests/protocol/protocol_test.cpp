@@ -58,29 +58,36 @@ int main()
 
     // Lobby messages: round trips.
     assert(decode(makeLobbyListRequest())->type == MessageType::LobbyListRequest);
-    std::vector<LobbyInfo> infos = {{"K7QX", "Alpha", 1, 2, LobbyPhase::Waiting},
-                                    {"23ZZ", "Bob's lobby", 0, 4, LobbyPhase::Playing}};
+    std::vector<LobbyInfo> infos = {{"K7QX", "Alpha", 2, LobbyPhase::Waiting},
+                                    {"23ZZ", "Bob's lobby", 4, LobbyPhase::Playing}};
+    assert(makeLobbyList({infos[0]}) ==
+           (std::vector<uint8_t>{14, 1, 'K', '7', 'Q', 'X', 5, 'A', 'l', 'p', 'h', 'a', 2, 1}));
     auto list = decode(makeLobbyList(infos));
     assert(list && list->lobbies.size() == 2 && list->lobbies[1].name == "Bob's lobby" &&
            list->lobbies[1].members == 4 && list->lobbies[1].state == LobbyPhase::Playing);
     assert(decode(makeLobbyList({}))->lobbies.empty());
-    auto create = decode(makeLobbyCreate("Alpha", 2));
-    assert(create && create->text == "Alpha" && create->value == 2);
+    assert(makeLobbyCreate("Alpha") == (std::vector<uint8_t>{15, 5, 'A', 'l', 'p', 'h', 'a'}));
+    assert(decode(makeLobbyCreate("Alpha"))->text == "Alpha");
     assert(decode(makeLobbyJoin("K7QX"))->code == "K7QX");
     assert(decode(makeLobbyRefuse(LobbyRefuseReason::Full))->value == 2);
     assert(decode(makeLobbyLeave())->type == MessageType::LobbyLeave);
-    LobbyState sent{"K7QX", "Alpha", 1, LobbyPhase::Playing, 2, 1,
+    LobbyState sent{"K7QX", "Alpha", LobbyPhase::Playing, 2, 1,
                     {{1, MemberRole::Player, "Ann"}, {2, MemberRole::Spectator, "Bo"}}};
+    assert(makeLobbyState(sent) == (std::vector<uint8_t>{19, 'K', '7', 'Q', 'X', 5, 'A', 'l', 'p', 'h', 'a',
+                                                         2, 2, 1, 2, 1, 1, 3, 'A', 'n', 'n',
+                                                         2, 2, 2, 'B', 'o'}));
     auto lobby = decode(makeLobbyState(sent));
     assert(lobby && lobby->lobby.code == "K7QX" && lobby->lobby.yourSlot == 2 &&
            lobby->lobby.leaderSlot == 1 && lobby->lobby.members.size() == 2 &&
            lobby->lobby.members[1].role == MemberRole::Spectator && lobby->lobby.members[1].name == "Bo");
     assert(decode(makeLobbyRename("Beta"))->text == "Beta");
-    assert(decode(makeLobbySetMap(2))->value == 2);
+    assert(makeLobbyStart() == std::vector<uint8_t>{21});
     assert(decode(makeLobbyStart())->type == MessageType::LobbyStart);
 
     // Lobby messages: invalid packets.
-    assert(!decode({15, 0, 1}));                  // empty name
+    assert(!decode({15, 0}));                     // empty name
+    assert(!decode({15, 1, 'A', 0}));             // trailing byte (there is no map)
+    assert(!decode({22}));                        // unknown type
     assert(!decode({20, 2, 'A', 0x07}));          // non-printable byte
     assert(!decode({20, 3, 'A', 'B'}));           // length longer than payload
     assert(!decode({16, 'K', '7', 'Q'}));         // short code
@@ -104,5 +111,5 @@ int main()
     catch (const std::invalid_argument&) { threw = true; }
     assert(threw);
 
-    std::cout << "All 22 protocol messages passed!\n";
+    std::cout << "All 21 protocol messages passed!\n";
 }

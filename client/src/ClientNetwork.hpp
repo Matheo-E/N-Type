@@ -47,12 +47,11 @@ public:
     // Players from the latest snapshot while our lobby plays; each entity id is a slot.
     const std::vector<protocol::Entity>& players() const { return players_; }
 
-    void create(const std::string& name, std::uint8_t map);
+    void create(const std::string& name);
     // Lower case is accepted.
     void join(std::string code);
     void leave();
     void rename(const std::string& name);
-    void set_map(std::uint8_t map);
     void start();
 
 private:

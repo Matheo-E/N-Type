@@ -130,7 +130,7 @@ int main() {
     assert(pump(all, [&] { return a.phase() == Phase::Browsing && b.phase() == Phase::Browsing &&
                                   c.phase() == Phase::Browsing; }));
 
-    a.create("Alpha", 1);
+    a.create("Alpha");
     assert(pump(all, [&] { return a.phase() == Phase::InLobby; }));
     assert(a.is_leader() && a.lobby()->code.size() == 4 && !a.busy());
     const auto code = a.lobby()->code;
@@ -148,9 +148,7 @@ int main() {
     b.clear_error();
 
     a.rename("Beta");
-    assert(pump(all, [&] { return !a.busy(); }));
-    a.set_map(2);
-    assert(pump(all, [&] { return b.lobby()->name == "Beta" && b.lobby()->map == 2; }));
+    assert(pump(all, [&] { return b.lobby()->name == "Beta"; }));
 
     a.start();
     assert(pump(all, [&] { return a.players().size() == 2 && b.players().size() == 2; }));
@@ -178,7 +176,7 @@ int main() {
         ClientNetwork d("127.0.0.1", relay.port(), "Di");
         const auto clients = {&a, &b, &c, &d};
         assert(pump(clients, [&] { return d.phase() == Phase::Browsing; }));
-        d.create("Delta", 0);
+        d.create("Delta");
         assert(pump(clients, [&] { return d.phase() == Phase::InLobby; }));
         const auto delta = d.lobby()->code;
         const auto listed = [&] {

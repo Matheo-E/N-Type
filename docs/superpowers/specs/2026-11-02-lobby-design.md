@@ -2,6 +2,11 @@
 
 Date: 2026-11-02 · Branch: `Lobby` (from `origin/login_page`)
 
+> **Amended 2026-11-02: map selection removed.** There is no map choice: the
+> game plays map N at level N. Every `map` field, `LobbySetMap`, `set_map`,
+> `kMapCount` and the map cards below no longer exist, and `LobbyStart` is
+> message **21**. [PROTOCOL_v2.md](../../PROTOCOL_v2.md) is the current wire format.
+
 ## 1. Goal
 
 A player starts the client, chooses a name, then either **creates** a lobby or

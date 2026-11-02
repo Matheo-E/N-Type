@@ -109,7 +109,7 @@ void Server::handle_lobby(const asio::ip::udp::endpoint& from, Client& client, c
         break;
     case MessageType::LobbyCreate:
         if (!lobby) {
-            lobby = lobbies_.create(packet.text, packet.value);
+            lobby = lobbies_.create(packet.text);
             if (!lobby) {
                 refuse(LobbyRefuseReason::TooManyLobbies);
                 return;
@@ -143,15 +143,12 @@ void Server::handle_lobby(const asio::ip::udp::endpoint& from, Client& client, c
         network_.send(from, protocol::makeLobbyList(lobbies_.list()));
         break;
     case MessageType::LobbyRename:
-    case MessageType::LobbySetMap:
     case MessageType::LobbyStart:
         if (!lobby) {
             return;
         }
         if (packet.type == MessageType::LobbyRename) {
             lobby->rename(client.id, packet.text);
-        } else if (packet.type == MessageType::LobbySetMap) {
-            lobby->set_map(client.id, packet.value);
         } else {
             lobby->start(client.id);
         }

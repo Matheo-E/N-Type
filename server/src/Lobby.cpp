@@ -11,8 +11,7 @@ namespace ntype::server {
 using protocol::LobbyPhase;
 using protocol::MemberRole;
 
-Lobby::Lobby(std::string code, std::string name, const std::uint8_t map)
-    : code_(std::move(code)), name_(std::move(name)), map_(map < config::kMapCount ? map : 0) {}
+Lobby::Lobby(std::string code, std::string name) : code_(std::move(code)), name_(std::move(name)) {}
 
 bool Lobby::has(const ClientId client) const {
     return std::any_of(members_.begin(), members_.end(), [client](const Member& m) { return m.client == client; });
@@ -69,14 +68,6 @@ bool Lobby::rename(const ClientId by, std::string name) {
     return true;
 }
 
-bool Lobby::set_map(const ClientId by, const std::uint8_t map) {
-    if (!is_leader(by) || phase_ != LobbyPhase::Waiting || map >= config::kMapCount) {
-        return false;
-    }
-    map_ = map;
-    return true;
-}
-
 bool Lobby::start(const ClientId by) {
     if (!is_leader(by) || phase_ != LobbyPhase::Waiting) {
         return false;
@@ -128,11 +119,11 @@ std::vector<protocol::Entity> Lobby::snapshot() const {
 }
 
 protocol::LobbyInfo Lobby::info() const {
-    return {code_, name_, map_, static_cast<std::uint8_t>(members_.size()), phase_};
+    return {code_, name_, static_cast<std::uint8_t>(members_.size()), phase_};
 }
 
 protocol::LobbyState Lobby::state_for(const ClientId client) const {
-    protocol::LobbyState state{code_, name_, map_, phase_, 0, 0, {}};
+    protocol::LobbyState state{code_, name_, phase_, 0, 0, {}};
     for (const auto& member : members_) {
         if (member.client == client) {
             state.yourSlot = member.slot;

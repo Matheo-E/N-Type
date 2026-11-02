@@ -17,7 +17,7 @@ public:
 
     // A new lobby with a fresh random code, or nullptr when the server has
     // too many lobbies. The returned pointer stays valid until the lobby is removed.
-    Lobby* create(std::string name, std::uint8_t map);
+    Lobby* create(std::string name);
     Lobby* find(const std::string& code);
     Lobby* lobby_of(ClientId client);
     void remove_empty();

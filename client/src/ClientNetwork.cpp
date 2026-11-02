@@ -188,8 +188,8 @@ void ClientNetwork::request(const std::function<std::vector<std::uint8_t>()>& ma
     send(bytes);
 }
 
-void ClientNetwork::create(const std::string& name, const std::uint8_t map) {
-    request([&] { return protocol::makeLobbyCreate(name, map); }, [this] { return lobby_.has_value(); }, true);
+void ClientNetwork::create(const std::string& name) {
+    request([&] { return protocol::makeLobbyCreate(name); }, [this] { return lobby_.has_value(); }, true);
 }
 
 void ClientNetwork::join(std::string code) {
@@ -217,10 +217,6 @@ void ClientNetwork::leave() {
 
 void ClientNetwork::rename(const std::string& name) {
     request([&] { return protocol::makeLobbyRename(name); }, [this, name] { return lobby_ && lobby_->name == name; });
-}
-
-void ClientNetwork::set_map(const std::uint8_t map) {
-    request([&] { return protocol::makeLobbySetMap(map); }, [this, map] { return lobby_ && lobby_->map == map; });
 }
 
 void ClientNetwork::start() {

@@ -24,19 +24,19 @@ void codes()
     Lobbies lobbies(42);
     std::set<std::string> seen;
     for (int i = 0; i < 32; i++) {
-        Lobby* lobby = lobbies.create("L", 0);
+        Lobby* lobby = lobbies.create("L");
         assert(lobby && lobby->code().size() == 4);
         for (char c : lobby->code())
             assert(protocol::kCodeAlphabet.find(c) != std::string_view::npos);
         seen.insert(lobby->code());
     }
     assert(seen.size() == 32);
-    assert(lobbies.create("L", 0) == nullptr);
+    assert(lobbies.create("L") == nullptr);
 }
 
 void slots()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     assert(lobby.join(1, "a") && lobby.join(2, "b") && lobby.join(3, "c"));
     assert(member(lobby, 1).slot == 1 && member(lobby, 2).slot == 2 && member(lobby, 3).slot == 3);
     lobby.leave(2);
@@ -48,7 +48,7 @@ void slots()
 
 void leader()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     lobby.join(1, "a");
     lobby.join(2, "b");
     lobby.join(3, "c");
@@ -60,20 +60,18 @@ void leader()
 
 void leader_only()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     lobby.join(1, "a");
     lobby.join(2, "b");
-    assert(!lobby.rename(2, "B") && !lobby.set_map(2, 1) && !lobby.start(2));
-    assert(!lobby.set_map(1, 3));
+    assert(!lobby.rename(2, "B") && !lobby.start(2));
     assert(lobby.rename(1, "B") && lobby.info().name == "B");
-    assert(lobby.set_map(1, 2) && lobby.info().map == 2);
     assert(lobby.start(1) && lobby.phase() == LobbyPhase::Playing);
-    assert(!lobby.rename(1, "C") && !lobby.set_map(1, 0) && !lobby.start(1));
+    assert(!lobby.rename(1, "C") && !lobby.start(1));
 }
 
 void spectators()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     lobby.join(1, "a");
     lobby.join(2, "b");
     lobby.start(1);
@@ -90,7 +88,7 @@ void spectators()
 
 void end_game()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     lobby.join(1, "a");
     lobby.start(1);
     lobby.join(2, "b");
@@ -103,7 +101,7 @@ void end_game()
 
 void last_player_leaves()
 {
-    Lobby lobby("K7QX", "L", 0);
+    Lobby lobby("K7QX", "L");
     lobby.join(1, "a");
     lobby.join(2, "b");
     lobby.start(1);
@@ -118,16 +116,15 @@ void last_player_leaves()
 void registry()
 {
     Lobbies lobbies(7);
-    Lobby* first = lobbies.create("First", 1);
-    Lobby* second = lobbies.create("Second", 0);
+    Lobby* first = lobbies.create("First");
+    Lobby* second = lobbies.create("Second");
     assert(first && second);
     first->join(10, "a");
     assert(lobbies.find(first->code()) == first && lobbies.find("ZZZZ") == nullptr);
     assert(lobbies.lobby_of(10) == first && lobbies.lobby_of(11) == nullptr);
-    assert(Lobbies(1).create("x", 9)->info().map == 0); // bad map falls back to 0
     lobbies.remove_empty();
     auto list = lobbies.list();
-    assert(list.size() == 1 && list[0].name == "First" && list[0].members == 1 && list[0].map == 1);
+    assert(list.size() == 1 && list[0].name == "First" && list[0].members == 1);
 }
 
 } // namespace

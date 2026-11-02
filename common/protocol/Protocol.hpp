@@ -37,7 +37,6 @@ struct Entity {
 struct LobbyInfo {
     std::string code;
     std::string name;
-    uint8_t map = 0;
     uint8_t members = 0;
     LobbyPhase state = LobbyPhase::Waiting;
 };
@@ -52,7 +51,6 @@ struct LobbyMember {
 struct LobbyState {
     std::string code;
     std::string name;
-    uint8_t map = 0;
     LobbyPhase state = LobbyPhase::Waiting;
     uint8_t yourSlot = 0;
     uint8_t leaderSlot = 0;
@@ -63,7 +61,7 @@ struct LobbyState {
 struct Packet {
     MessageType type = MessageType::ConnectRequest;
     uint16_t id = 0;       // Player ID or entity ID
-    uint8_t value = 0;     // Keys, refusal reason, kind, event, game state or map
+    uint8_t value = 0;     // Keys, refusal reason, kind, event, or game state
     int16_t x = 0;
     int16_t y = 0;
     std::vector<Entity> entities; // Only used for WorldSnapshot
@@ -87,13 +85,12 @@ std::vector<uint8_t> makeClientLeft(uint8_t playerId);
 std::vector<uint8_t> makeGameStateChange(uint8_t state);
 std::vector<uint8_t> makeLobbyListRequest();
 std::vector<uint8_t> makeLobbyList(const std::vector<LobbyInfo>& lobbies);
-std::vector<uint8_t> makeLobbyCreate(const std::string& name, uint8_t map);
+std::vector<uint8_t> makeLobbyCreate(const std::string& name);
 std::vector<uint8_t> makeLobbyJoin(const std::string& code);
 std::vector<uint8_t> makeLobbyRefuse(LobbyRefuseReason reason);
 std::vector<uint8_t> makeLobbyLeave();
 std::vector<uint8_t> makeLobbyState(const LobbyState& lobby);
 std::vector<uint8_t> makeLobbyRename(const std::string& name);
-std::vector<uint8_t> makeLobbySetMap(uint8_t map);
 std::vector<uint8_t> makeLobbyStart();
 
 // Returns std::nullopt if the received message is invalid.
