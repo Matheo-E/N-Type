@@ -27,7 +27,7 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 } // namespace
 
 ClientApp::ClientApp(const std::string& name, const std::string& host, const std::uint16_t port)
-    : name_(name), network_(host, port) {
+    : name_(name), network_(host, port, name) {
     create_window();
 }
 

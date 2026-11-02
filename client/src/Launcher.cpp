@@ -85,7 +85,7 @@ bool server_is_reachable(const std::string& host, const std::uint16_t port, std:
         return false;
     }
 
-    const auto request = protocol::makeConnectRequest();
+    const auto request = protocol::makeConnectRequest("probe");
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     auto next_send = std::chrono::steady_clock::time_point{};
     while (std::chrono::steady_clock::now() < deadline) {

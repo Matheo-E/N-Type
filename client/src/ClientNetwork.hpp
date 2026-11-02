@@ -14,7 +14,7 @@ namespace ntype::client {
 
 class ClientNetwork {
 public:
-    ClientNetwork(const std::string& host, std::uint16_t port);
+    ClientNetwork(const std::string& host, std::uint16_t port, std::string name);
     ~ClientNetwork();
     void update(std::uint8_t input);
     void disconnect();
@@ -33,6 +33,7 @@ private:
     void handle(const std::vector<std::uint8_t>& bytes);
     void reset();
 
+    std::string name_;
     asio::io_context io_;
     asio::ip::udp::socket socket_;
     asio::ip::udp::endpoint server_;

@@ -11,8 +11,8 @@ namespace ntype::client {
 using namespace std::chrono_literals;
 using protocol::MessageType;
 
-ClientNetwork::ClientNetwork(const std::string& host, const std::uint16_t port)
-    : socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), 0)) {
+ClientNetwork::ClientNetwork(const std::string& host, const std::uint16_t port, std::string name)
+    : name_(std::move(name)), socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), 0)) {
     asio::ip::udp::resolver resolver(io_);
     server_ = *resolver.resolve(asio::ip::udp::v4(), host, std::to_string(port)).begin();
     socket_.non_blocking(true);
@@ -54,9 +54,9 @@ void ClientNetwork::handle(const std::vector<std::uint8_t>& bytes) {
     }
     switch (packet->type) {
     case MessageType::ConnectAccept:
-        id_ = static_cast<std::uint8_t>(packet->id);
+        id_ = 1;
         last_received_ = Clock::now();
-        status_ = "Player " + std::to_string(packet->id);
+        status_ = "Connected";
         break;
     case MessageType::ConnectRefuse:
         if (!id_) {
@@ -100,7 +100,7 @@ void ClientNetwork::update(const std::uint8_t input) {
         // Sent every frame, so it is also our heartbeat.
         send(protocol::makeInput(input));
     } else if (now - last_connect_ >= 500ms) {
-        send(protocol::makeConnectRequest());
+        send(protocol::makeConnectRequest(name_));
         last_connect_ = now;
     }
 }

@@ -6,7 +6,7 @@
 namespace ntype::server {
 
 NetworkThread::NetworkThread(const std::uint16_t port)
-    : socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), port)) {
+    : socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), port)), port_(socket_.local_endpoint().port()) {
     receive();
     thread_ = std::thread([this] { io_.run(); });
 }

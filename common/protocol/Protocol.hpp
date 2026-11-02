@@ -73,8 +73,8 @@ struct Packet {
     LobbyState lobby;             // Only used for LobbyState
 };
 
-std::vector<uint8_t> makeConnectRequest();
-std::vector<uint8_t> makeConnectAccept(uint8_t playerId);
+std::vector<uint8_t> makeConnectRequest(const std::string& name);
+std::vector<uint8_t> makeConnectAccept();
 std::vector<uint8_t> makeConnectRefuse(RefuseReason reason);
 std::vector<uint8_t> makeDisconnect();
 std::vector<uint8_t> makeInput(uint8_t keys);

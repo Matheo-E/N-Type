@@ -7,10 +7,12 @@ int main()
 {
     using namespace protocol;
 
-    auto request = decode(makeConnectRequest());
-    assert(request && request->type == MessageType::ConnectRequest);
-    auto accepted = decode(makeConnectAccept(2));
-    assert(accepted && accepted->id == 2);
+    auto request = decode(makeConnectRequest("Ann"));
+    assert(request && request->type == MessageType::ConnectRequest && request->text == "Ann");
+    assert(!decode({1}));      // the name is required
+    assert(makeConnectAccept().size() == 1);
+    assert(decode(makeConnectAccept()));
+    assert(!decode({2, 1}));   // the old accept carried a player id
     auto refused = decode(makeConnectRefuse(RefuseReason::ServerFull));
     assert(refused && refused->value == 1);
     assert(decode(makeDisconnect()));

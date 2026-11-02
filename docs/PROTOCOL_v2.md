@@ -29,8 +29,8 @@ Every message begins with **1 byte identifying its type**, followed by the field
 
 | ID | Name | Direction | Payload after type | Total size |
 | ---: | --- | --- | --- | ---: |
-| 1 | `ConnectRequest` | Client → Server | None | 1 byte |
-| 2 | `ConnectAccept` | Server → Client | `playerId` (`uint8_t`) | 2 bytes |
+| 1 | `ConnectRequest` | Client → Server | `name` (`str`, 1–16) | variable |
+| 2 | `ConnectAccept` | Server → Client | None | 1 byte |
 | 3 | `ConnectRefuse` | Server → Client | `reason` (`uint8_t`) | 2 bytes |
 | 4 | `Disconnect` | Client → Server | None | 1 byte |
 | 5 | `Input` | Client → Server | `keys` (`uint8_t`) | 2 bytes |
@@ -56,12 +56,13 @@ Every message begins with **1 byte identifying its type**, followed by the field
 
 ## 3. Values used in messages
 
-### Player IDs and connection
+### Connection
 
-- `ConnectRequest` asks the server to join the game.
-- `ConnectAccept` returns a **player ID from 1 to 4**.
-- `ConnectRefuse` returns `1` for **ServerFull** or `2` for **ServerError**.
-- `Disconnect` is sent when a client leaves normally. `ClientLeft` tells other clients that a player has left.
+- `ConnectRequest` carries the player's name and asks the server to accept the client. It is repeated every 500 ms until answered.
+- `ConnectAccept` has no payload. Player IDs (1–4) are **lobby slots**, given by `LobbyState`.
+- `ConnectRefuse` returns `1` for **ServerFull** (the server already holds 128 clients) or `2` for **ServerError**.
+- `Disconnect` is sent when a client leaves normally. `ClientLeft` tells the other members of a playing lobby that a player (slot) has left.
+- `Input` is sent every frame on every screen and is also the heartbeat: a client silent for 5 s is dropped. Its keys only move a player of a running game.
 
 ### Player inputs
 
@@ -113,6 +114,15 @@ One server hosts up to 32 lobbies; each lobby runs its own game for up to 4 memb
 - `map` is a map id from `0`; the server checks the range, the decoder does not.
 - `LobbyState` is built for each recipient: `yourSlot` is the slot of the member who receives it. The leader is the member present the longest.
 - Picking a lobby from the list sends `LobbyJoin` with its code.
+- `WorldSnapshot` is sent every tick to the members of each playing lobby only; entity IDs are the lobby slots.
+
+**Reliability: the state is re-sent, requests are repeated.** There are no acknowledgements:
+
+- While browsing, the client sends `LobbyListRequest` every second; the server answers with the whole `LobbyList`.
+- The server sends every lobby member its `LobbyState` 10 times per second, and once right after each request.
+- The client repeats each request (`LobbyCreate`, `LobbyJoin`, `LobbyRename`, `LobbySetMap`, `LobbyStart`) every 250 ms until a `LobbyState` shows its effect, or until `LobbyRefuse` arrives.
+- `LobbyLeave` is repeated until a `LobbyList` arrives: the server always answers it with the list.
+- Every request is safe to repeat. A member sending `LobbyCreate` or `LobbyJoin` gets its current lobby's state back. Requests from non-leaders, or invalid in the lobby's state, are ignored: the next `LobbyState` shows nothing changed.
 
 ## 4. Example: moving and shooting
 

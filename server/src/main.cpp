@@ -19,12 +19,15 @@ int main(int argc, char** argv) {
         const auto options = ntype::parse_options(argc, argv, ntype::Application::Server);
         if (options.help) {
             std::cout << "USAGE: ./r-type_server [-p port]\n"
-                         "  -p port   UDP port to listen on (default 4242)\n";
+                         "  -p port   UDP port to listen on (default 4242)\n"
+                         "Console commands: level <code>, gameover <code>\n";
             return 0;
         }
         std::signal(SIGINT, on_signal);
         std::signal(SIGTERM, on_signal);
         ntype::server::Server server(options.port);
+        ntype::server::Console console;
+        server.set_console(&console);
         server.run(running);
     } catch (const std::exception& error) {
         std::cerr << "[server] fatal: " << error.what() << '\n';

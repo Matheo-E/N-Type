@@ -130,14 +130,16 @@ struct Reader {
     bool done() const { return ok && position == data.size(); }
 };
 
-std::vector<uint8_t> makeConnectRequest()
+std::vector<uint8_t> makeConnectRequest(const std::string& name)
 {
-    return {messageId(MessageType::ConnectRequest)};
+    std::vector<uint8_t> data = {messageId(MessageType::ConnectRequest)};
+    writeString(data, name, kMaxPlayerName);
+    return data;
 }
 
-std::vector<uint8_t> makeConnectAccept(uint8_t playerId)
+std::vector<uint8_t> makeConnectAccept()
 {
-    return {messageId(MessageType::ConnectAccept), playerId};
+    return {messageId(MessageType::ConnectAccept)};
 }
 
 std::vector<uint8_t> makeConnectRefuse(RefuseReason reason)
@@ -305,19 +307,21 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
     packet.type = static_cast<MessageType>(data[0]);
 
     switch (packet.type) {
-        case MessageType::ConnectRequest:
+        case MessageType::ConnectRequest: {
+            Reader reader{data};
+            packet.text = reader.string(kMaxPlayerName);
+            if (!reader.done())
+                return std::nullopt;
+            break;
+        }
+
+        case MessageType::ConnectAccept:
         case MessageType::Disconnect:
         case MessageType::LobbyListRequest:
         case MessageType::LobbyLeave:
         case MessageType::LobbyStart:
             if (data.size() != 1)
                 return std::nullopt;
-            break;
-
-        case MessageType::ConnectAccept:
-            if (data.size() != 2 || data[1] < 1 || data[1] > 4)
-                return std::nullopt;
-            packet.id = data[1];
             break;
 
         case MessageType::ConnectRefuse:
