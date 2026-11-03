@@ -318,7 +318,9 @@ void ClientApp::update_camera(const float elapsed_seconds) {
 /**
  * @brief Draws one complete Parallax background into a render target.
  *
- * Each layer uses the same camera position multiplied by its configured factor.
+ * Each layer combines the player camera with a time-based automatic distance,
+ * then multiplies that total by its configured factor. The background therefore
+ * keeps moving while the player is stationary without changing world positions.
  * Two copies are sufficient because every source image is wider than the viewport
  * after scaling; a third copy is drawn defensively for future narrower assets.
  *
@@ -332,7 +334,11 @@ void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
         const float scale = static_cast<float>(config::kHeight) /
                             static_cast<float>(texture_size.y);
         const float tile_width = static_cast<float>(texture_size.x) * scale;
-        float offset = std::fmod(camera_x_ * background::kParallaxFactors[layer], tile_width);
+        const double scrolling_x =
+            static_cast<double>(camera_x_) + automatic_background_x_;
+        float offset = static_cast<float>(std::fmod(
+            scrolling_x * static_cast<double>(background::kParallaxFactors[layer]),
+            static_cast<double>(tile_width)));
         if (offset < 0.f) offset += tile_width;
 
         for (int tile = -1; tile <= 1; ++tile) {
@@ -412,6 +418,7 @@ void ClientApp::render() {
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);
     update_camera(elapsed_seconds);
+    automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
     window_.clear(sf::Color::Black);
     draw_parallax();
 

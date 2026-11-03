@@ -70,6 +70,7 @@ private:
     sf::Clock animation_clock_;
     sf::Clock frame_clock_;
     float camera_x_ = 0.f;
+    double automatic_background_x_ = 0.0;
     bool camera_initialized_ = false;
     bool pause_menu_open_ = false;
     bool music_enabled_ = true;
