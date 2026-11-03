@@ -1,28 +1,17 @@
 # N-Type
 
-A small C++ game engine, written step by step: an ECS on top of SFML.
-
-- **Entity**: just an id (`int`).
-- **Components** (`engine/include/Component.hpp`): plain data, such as `E_Position`, `E_Velocity` and `E_Rectangle`.
-- **World** (`engine/include/World.hpp`): one map per component type, keyed by entity id.
-- **Systems** (`engine/src/System.cpp`): functions over the world: `Move_Input` (ZQSD), `Movement`, `Draw`.
-- **Factory** (`engine/src/Factory.cpp`): functions that build entities, such as `Create_E_Player`.
-
-```
-engine/include/   headers
-engine/src/       systems and factory
-src/main.cpp      window and game loop
-assets/           sprites, sounds, font
-docs/             project subject
-```
-
-## Build and run
+A small C++20 game engine: an ECS on top of SFML. First target: a bullet hell.
 
 ```sh
+sudo apt install g++ cmake ninja-build libsfml-dev nlohmann-json3-dev
 cmake -S . -B build -G Ninja
 cmake --build build
 ./build/ntype
 ```
 
-Needs CMake 3.25+, a C++20 compiler and SFML 2.6 (`libsfml-dev`).
-Move the green square with Z, Q, S, D.
+Move the green square with Z, Q, S, D and shoot with Space. Two enemy types,
+loaded from `assets/data/enemies.json`, fly and fire patterns of bullets.
+
+**New here? Read [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md).** It explains the
+ECS idea, every file, the enemy data format, the conventions, and how to add
+components, systems, factories and enemies.

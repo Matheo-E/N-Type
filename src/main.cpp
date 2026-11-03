@@ -1,11 +1,19 @@
 #include "../engine/include/System.hpp"
 #include "../engine/include/Factory.hpp"
+#include "../engine/include/Loader.hpp"
+
+#include <string>
 
 int main(void) {
     World world;
+    if (!LoadEnemies(world, NTYPE_ASSETS_DIR)) {
+        return 1;
+    }
     sf::RenderWindow win;
-    Create_Game(win, "Ntype");
-    int player = Create_E_Player(world, {50.0f, 20.0f});
+    CreateGame(win, "Ntype");
+    int player = CreateEPlayer(world, {50.0f, 500.0f});
+    CreateEEnemy(world, {250.0f, 100.0f}, 1);  // fairy
+    CreateEEnemy(world, {550.0f, 100.0f}, 2);  // midboss
     sf::Clock clock;
     float dt = clock.restart().asSeconds();
     while(win.isOpen()) {

@@ -1,9 +1,10 @@
 #include "../include/System.hpp"
 
+#include <algorithm>
 #include <cmath>
 
-void Create_Game(sf::RenderWindow& window, sf::String name) {
-    window.create(sf::VideoMode(800, 600), name);
+void CreateGame(sf::RenderWindow& window, sf::String name) {
+    window.create(sf::VideoMode(WindowWidth, WindowHeight), name);
     window.setFramerateLimit(60);
     window.setKeyRepeatEnabled(false);
 }
@@ -15,18 +16,24 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
             window.close();
         }
     }
+    dt = std::min(dt, 0.05f);  // a long stall (window drag) must not teleport things
     window.clear(sf::Color::Black);
-    Move_Input(world, playerid);
+    MoveInput(world, playerid);
+    Flight(world, dt);
+    Follow(world);
+    Spawner(world, dt);
     Movement(world, dt);
+    Collision(world);
+    Timers(world, dt);
+    Cull(world);
     Draw(world, window);
     window.display();
 }
 
-void Move_Input(World& world, int playerid) {
-    constexpr float Player_Speed = 200.0f;
-
+void MoveInput(World& world, int playerid) {
     auto it = world.Velocities.find(playerid);
-    if (it == world.Velocities.end()) {
+    auto speed = world.Speeds.find(playerid);
+    if (it == world.Velocities.end() || speed == world.Speeds.end()) {
         return;
     }
 
@@ -41,7 +48,7 @@ void Move_Input(World& world, int playerid) {
     if (len > 0.0f) {
         dir /= len;  // diagonals would otherwise be ~1.4x faster
     }
-    it->second.Xy = dir * Player_Speed;
+    it->second.Xy = dir * speed->second.Value;
 }
 
 void Movement(World& world, float dt) {
@@ -53,12 +60,45 @@ void Movement(World& world, float dt) {
     }
 }
 
+namespace {
+
+// Sprites are drawn around their position, like circles.
+void DrawSprites(World& world, sf::RenderWindow& window) {
+    for (auto& [id, look] : world.TextureIds) {
+        auto pos = world.Positions.find(id);
+        auto texture = world.Textures.find(look.TextId);
+        if (pos == world.Positions.end() || texture == world.Textures.end()) {
+            continue;
+        }
+        sf::Sprite sprite(texture->second);
+        if (look.Source.width > 0 && look.Source.height > 0) {
+            sprite.setTextureRect(look.Source);
+        }
+        const sf::FloatRect bounds = sprite.getLocalBounds();
+        sprite.setOrigin(bounds.width / 2, bounds.height / 2);
+        sprite.setScale(look.Scale);
+        sprite.setPosition(pos->second.Xy);
+        window.draw(sprite);
+    }
+}
+
+}  // namespace
+
+// Order: sprites, then rectangles, then circles (bullets end up on top).
 void Draw(World& world, sf::RenderWindow& window) {
+    DrawSprites(world, window);
     for (auto& [id, rect] : world.Rectangles) {
         auto it = world.Positions.find(id);
         if (it != world.Positions.end()) {
             rect.Rect.setPosition(it->second.Xy);
             window.draw(rect.Rect);
+        }
+    }
+    for (auto& [id, circle] : world.Circles) {
+        auto it = world.Positions.find(id);
+        if (it != world.Positions.end()) {
+            circle.Circle.setPosition(it->second.Xy);
+            window.draw(circle.Circle);
         }
     }
 }
