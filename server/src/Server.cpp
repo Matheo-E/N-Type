@@ -19,7 +19,6 @@ constexpr int kTickRate = 60;
 constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
 
-constexpr float kMaxX = static_cast<float>(config::kWidth) - config::kPlayerSize;
 constexpr float kMaxY = static_cast<float>(config::kHeight) - config::kPlayerSize;
 
 bool pressed(const std::uint8_t keys, const InputType key) {
@@ -159,7 +158,9 @@ void Server::move_players() {
     Movement(world_, kDt);
     for (const auto& [endpoint, player] : players_) {
         auto& position = world_.Positions[player.entity].Xy;
-        position.x = std::clamp(position.x, 0.0F, kMaxX);
+        // The level scrolls horizontally: only its explicit starting edge is solid.
+        // There is no implicit right edge tied to the viewport or background width.
+        position.x = std::max(position.x, 0.0F);
         position.y = std::clamp(position.y, 0.0F, kMaxY);
     }
 }
@@ -178,8 +179,8 @@ void Server::broadcast_snapshot() {
     std::vector<protocol::Entity> entities;
     for (const auto& [endpoint, player] : players_) {
         const auto& position = world_.Positions[player.entity].Xy;
-        entities.push_back({player.id, config::kPlayerKind, static_cast<std::int16_t>(position.x),
-                            static_cast<std::int16_t>(position.y)});
+        entities.push_back({player.id, config::kPlayerKind, static_cast<std::int32_t>(position.x),
+                            static_cast<std::int32_t>(position.y)});
     }
     broadcast(protocol::makeWorldSnapshot(entities));
 }

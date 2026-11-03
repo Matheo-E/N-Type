@@ -2,11 +2,15 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <stdexcept>
 
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
+#include <SFML/Window/Mouse.hpp>
 
 #include "Factory.hpp"
+#include "BackgroundConfig.hpp"
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
 #include "System.hpp"
@@ -15,10 +19,17 @@ namespace ntype::client {
 
 namespace {
 
-// One colour per player, indexed by player id - 1.
-const std::array<sf::Color, config::kMaxPlayers> kColors{
-    sf::Color(80, 180, 255), sf::Color(255, 160, 60), sf::Color(110, 220, 110), sf::Color(240, 100, 200)};
 const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange", "green", "pink"};
+
+constexpr int kPlayerFrameSize = 724;
+constexpr float kRenderedPlayerSize = 88.f;
+constexpr float kCameraAnchorX = 320.f;
+constexpr float kCameraResponsiveness = 10.f;
+const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
+const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
+const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
+const sf::FloatRect kLobbyButton{350.f, 450.f, 280.f, 100.f};
+const sf::FloatRect kMusicButton{650.f, 450.f, 280.f, 100.f};
 
 constexpr std::uint8_t bit(const protocol::InputType key) {
     return static_cast<std::uint8_t>(key);
@@ -26,17 +37,77 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 
 } // namespace
 
-ClientApp::ClientApp(const std::string& name, const std::string& host, const std::uint16_t port)
-    : name_(name), network_(host, port) {
+ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::string& name,
+                     const std::string& host, const std::uint16_t port,
+                     const bool music_enabled)
+    : name_(name), network_(host, port), window_(window), fullscreen_(fullscreen),
+      music_enabled_(music_enabled) {
+    const std::string asset_dir = NTYPE_ASSET_DIR;
+    if (!player_texture_.loadFromFile(asset_dir + "/dent.png"))
+        throw std::runtime_error("Unable to load dent.png");
+    if (!menu_texture_.loadFromFile(asset_dir + "/menu.png"))
+        throw std::runtime_error("Unable to load menu.png");
+    load_background(0, 0);
     create_window();
+    load_level_music(0);
+    frame_clock_.restart();
 }
 
-void ClientApp::create_window() {
-    if (fullscreen_) {
-        window_.create(sf::VideoMode::getDesktopMode(), "N-Type | Connecting", sf::Style::Fullscreen);
+/**
+ * @brief Loads the four layers for the automatically selected level and ambience.
+ * @param level Zero-based adventure level.
+ * @param ambience Zero for day, one for night.
+ */
+void ClientApp::load_background(const std::size_t level, const std::size_t ambience) {
+    const std::string asset_dir = NTYPE_ASSET_DIR;
+    const background::Selection selection{level, ambience};
+    for (std::size_t layer = 0; layer < background_textures_.size(); ++layer) {
+        const auto path = background::layer_path(asset_dir, selection, layer);
+        if (!background_textures_[layer].loadFromFile(path))
+            throw std::runtime_error("Unable to load parallax layer: " + path);
+        background_textures_[layer].setSmooth(true);
+    }
+    current_level_ = level;
+    current_ambience_ = ambience;
+}
+
+/** @brief Replaces the looping soundtrack when the automatic level changes. */
+void ClientApp::load_level_music(const std::size_t level) {
+    const auto path = background::music_path(NTYPE_ASSET_DIR, {level, 0});
+    music_.stop();
+    if (!music_.openFromFile(path))
+        throw std::runtime_error("Unable to load level music: " + path);
+    music_.setLoop(true);
+    music_.setVolume(40.f);
+    if (music_enabled_) music_.play();
+}
+
+/**
+ * @brief Advances the temporary timed adventure progression.
+ * @param elapsed_seconds Duration of the last rendered frame.
+ */
+void ClientApp::update_adventure(const float elapsed_seconds) {
+    adventure_elapsed_seconds_ += elapsed_seconds;
+    const auto selection = background::selection_at_time(adventure_elapsed_seconds_);
+    if (selection.level == current_level_ && selection.ambience == current_ambience_) return;
+
+    const bool level_changed = selection.level != current_level_;
+    load_background(selection.level, selection.ambience);
+    if (level_changed) load_level_music(selection.level);
+}
+
+void ClientApp::create_window(const bool recreate) {
+    if (!window_.isOpen() || recreate) {
+        if (fullscreen_) {
+            window_.create(sf::VideoMode::getDesktopMode(), "N-Type | Connecting",
+                           sf::Style::Fullscreen);
+        } else {
+            window_.create(sf::VideoMode(config::kWidth, config::kHeight),
+                           "N-Type | Connecting", sf::Style::Default);
+        }
     } else {
-        window_.create(sf::VideoMode(config::kWidth, config::kHeight), "N-Type | Connecting",
-                       sf::Style::Default);
+        window_.setTitle("N-Type | Connecting");
+        if (!fullscreen_) window_.setSize({config::kWidth, config::kHeight});
     }
     window_.setFramerateLimit(60);
     update_view();
@@ -61,41 +132,70 @@ void ClientApp::update_view() {
     window_.setView(view);
 }
 
-void ClientApp::run() {
-    while (window_.isOpen()) {
+GameExitAction ClientApp::run() {
+    while (window_.isOpen() && session_active_) {
         poll_events();
-        if (!window_.isOpen()) {
+        if (!window_.isOpen() || !session_active_) {
             break;
         }
-        network_.update(read_input());
+        network_.update(pause_menu_open_ ? 0 : read_input());
         std::string title = "N-Type | " + name_ + " | " + network_.status();
         if (const auto id = network_.id()) {
             title += std::string(" (") + kColorNames[*id - 1U] + ")";
         }
-        window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: quit");
+        window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: menu");
         render();
     }
     network_.disconnect();
+    music_.stop();
+    return exit_action_;
 }
 
 void ClientApp::poll_events() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
-        if (event.type == sf::Event::Closed ||
-            (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)) {
+        if (event.type == sf::Event::Closed) {
+            exit_action_ = GameExitAction::Quit;
+            session_active_ = false;
             window_.close();
             return;
         }
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+            pause_menu_open_ = !pause_menu_open_;
+        }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
             fullscreen_ = !fullscreen_;
-            create_window();
+            create_window(true);
         }
         if (event.type == sf::Event::Resized) update_view();
+        if (event.type == sf::Event::MouseButtonPressed &&
+            event.mouseButton.button == sf::Mouse::Left) {
+            const auto point = window_.mapPixelToCoords({event.mouseButton.x, event.mouseButton.y});
+            if (kMenuButton.contains(point)) {
+                pause_menu_open_ = !pause_menu_open_;
+            } else if (pause_menu_open_ && kContinueButton.contains(point)) {
+                pause_menu_open_ = false;
+            } else if (pause_menu_open_ && kRestartButton.contains(point)) {
+                exit_action_ = GameExitAction::Restart;
+                session_active_ = false;
+                return;
+            } else if (pause_menu_open_ && kLobbyButton.contains(point)) {
+                exit_action_ = GameExitAction::Lobby;
+                session_active_ = false;
+                return;
+            } else if (pause_menu_open_ && kMusicButton.contains(point)) {
+                music_enabled_ = !music_enabled_;
+                if (music_enabled_)
+                    music_.play();
+                else
+                    music_.pause();
+            }
+        }
     }
 }
 
 std::uint8_t ClientApp::read_input() const {
-    if (!window_.hasFocus()) {
+    if (!window_.hasFocus() || pause_menu_open_) {
         return 0;
     }
     using Key = sf::Keyboard::Key;
@@ -128,6 +228,8 @@ void ClientApp::sync_world() {
         if (std::none_of(players.begin(), players.end(), [id](const auto& player) { return player.id == id; })) {
             world_.Positions.erase(it->second);
             world_.Rectangles.erase(it->second);
+            previous_positions_.erase(id);
+            last_movement_times_.erase(id);
             it = entities_.erase(it);
         } else {
             ++it;
@@ -137,19 +239,129 @@ void ClientApp::sync_world() {
         auto [it, added] = entities_.try_emplace(player.id, 0);
         if (added) {
             it->second = Create_E(world_);
-            auto& square = world_.Rectangles[it->second].Rect;
-            square.setSize({config::kPlayerSize, config::kPlayerSize});
-            square.setFillColor(kColors[player.id - 1U]);
         }
         // The server is authoritative: positions are copied, never simulated here.
         world_.Positions[it->second].Xy = {static_cast<float>(player.x), static_cast<float>(player.y)};
     }
 }
 
+/**
+ * @brief Smoothly follows the local player while leaving server coordinates untouched.
+ * @param elapsed_seconds Time elapsed since the previous rendered frame.
+ */
+void ClientApp::update_camera(const float elapsed_seconds) {
+    const auto local_id = network_.id();
+    if (!local_id) return;
+    const auto entity = entities_.find(*local_id);
+    if (entity == entities_.end()) return;
+
+    const float player_x = world_.Positions.at(entity->second).Xy.x;
+    const float target = std::max(0.f, player_x - kCameraAnchorX);
+    if (!camera_initialized_) {
+        camera_x_ = target;
+        camera_initialized_ = true;
+        return;
+    }
+    const float blend = std::min(1.f, elapsed_seconds * kCameraResponsiveness);
+    camera_x_ += (target - camera_x_) * blend;
+}
+
+/**
+ * @brief Draws the four transparent layers with seamless horizontal repetition.
+ *
+ * Each layer uses the same camera position multiplied by its configured factor.
+ * Two copies are sufficient because every source image is wider than the viewport
+ * after scaling; a third copy is drawn defensively for future narrower assets.
+ */
+void ClientApp::draw_parallax() {
+    for (std::size_t layer = 0; layer < background_textures_.size(); ++layer) {
+        const auto texture_size = background_textures_[layer].getSize();
+        const float scale = static_cast<float>(config::kHeight) /
+                            static_cast<float>(texture_size.y);
+        const float tile_width = static_cast<float>(texture_size.x) * scale;
+        float offset = std::fmod(camera_x_ * background::kParallaxFactors[layer], tile_width);
+        if (offset < 0.f) offset += tile_width;
+
+        for (int tile = -1; tile <= 1; ++tile) {
+            sf::Sprite sprite(background_textures_[layer]);
+            sprite.setScale(scale, scale);
+            sprite.setPosition(static_cast<float>(tile) * tile_width - offset, 0.f);
+            window_.draw(sprite);
+        }
+    }
+}
+
+/**
+ * @brief Draws the pause controls by cropping the supplied menu.png spritesheet.
+ *
+ * Pausing suppresses local input but networking continues, which keeps a
+ * multiplayer client connected and allows other players to keep moving.
+ */
+void ClientApp::draw_pause_menu() {
+    const auto draw_asset = [&](const sf::IntRect source, const sf::FloatRect target) {
+        sf::Sprite sprite(menu_texture_);
+        sprite.setTextureRect(source);
+        sprite.setPosition(target.left, target.top);
+        sprite.setScale(target.width / static_cast<float>(source.width),
+                        target.height / static_cast<float>(source.height));
+        window_.draw(sprite);
+    };
+
+    // The pause icon remains accessible while playing and closes the overlay too.
+    draw_asset({390, 790, 158, 145}, kMenuButton);
+    if (!pause_menu_open_) return;
+
+    sf::RectangleShape shade({static_cast<float>(config::kWidth),
+                              static_cast<float>(config::kHeight)});
+    shade.setFillColor(sf::Color(5, 8, 30, 185));
+    window_.draw(shade);
+    sf::RectangleShape panel({640.f, 470.f});
+    panel.setPosition(320.f, 125.f);
+    panel.setFillColor(sf::Color(19, 22, 112, 235));
+    panel.setOutlineThickness(4.f);
+    panel.setOutlineColor(sf::Color(91, 196, 245));
+    window_.draw(panel);
+
+    draw_asset({1080, 250, 350, 130}, kContinueButton);
+    draw_asset({380, 250, 350, 130}, kRestartButton);
+    draw_asset({15, 250, 350, 130}, kLobbyButton);
+    draw_asset(music_enabled_ ? sf::IntRect{380, 520, 350, 130}
+                              : sf::IntRect{15, 520, 350, 130},
+               kMusicButton);
+    draw_asset({390, 790, 158, 145}, kMenuButton);
+}
+
 void ClientApp::render() {
     sync_world();
+    const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
+    update_adventure(elapsed_seconds);
+    update_camera(elapsed_seconds);
     window_.clear(sf::Color::Black);
-    Draw(world_, window_);
+    draw_parallax();
+
+    const float animation_time = animation_clock_.getElapsedTime().asSeconds();
+    for (const auto& [player_id, entity] : entities_) {
+        const auto position = world_.Positions.at(entity).Xy;
+        const auto previous = previous_positions_.find(player_id);
+        const bool position_changed = previous != previous_positions_.end() &&
+            (std::abs(position.x - previous->second.x) > 0.05f ||
+             std::abs(position.y - previous->second.y) > 0.05f);
+        if (position_changed) last_movement_times_[player_id] = animation_time;
+        const auto last_movement = last_movement_times_.find(player_id);
+        const bool moving = last_movement != last_movement_times_.end() &&
+                            animation_time - last_movement->second < 0.12f;
+        const int frame = moving ? 1 + static_cast<int>(animation_time * 8.f) % 2 : 0;
+
+        sf::Sprite tooth(player_texture_);
+        tooth.setTextureRect({frame * kPlayerFrameSize, 0, kPlayerFrameSize, kPlayerFrameSize});
+        const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
+        tooth.setScale(scale, scale);
+        const float offset = (kRenderedPlayerSize - config::kPlayerSize) / 2.f;
+        tooth.setPosition(position.x - camera_x_ - offset, position.y - offset);
+        window_.draw(tooth);
+        previous_positions_[player_id] = position;
+    }
+    draw_pause_menu();
     window_.display();
 }
 

@@ -28,12 +28,22 @@ static uint16_t read16(const std::vector<uint8_t>& data, size_t position)
            (static_cast<uint16_t>(data[position + 1]) << 8);
 }
 
-static int16_t readPosition(const std::vector<uint8_t>& data, size_t position)
+static void write32(std::vector<uint8_t>& data, const int32_t number)
 {
-    int32_t number = read16(data, position);
-    if (number >= 32768)
-        number -= 65536;
-    return static_cast<int16_t>(number);
+    const auto bits = static_cast<uint32_t>(number);
+    data.push_back(static_cast<uint8_t>(bits & 0xFF));
+    data.push_back(static_cast<uint8_t>((bits >> 8) & 0xFF));
+    data.push_back(static_cast<uint8_t>((bits >> 16) & 0xFF));
+    data.push_back(static_cast<uint8_t>((bits >> 24) & 0xFF));
+}
+
+static int32_t readPosition(const std::vector<uint8_t>& data, const size_t position)
+{
+    const uint32_t bits = static_cast<uint32_t>(data[position]) |
+        (static_cast<uint32_t>(data[position + 1]) << 8) |
+        (static_cast<uint32_t>(data[position + 2]) << 16) |
+        (static_cast<uint32_t>(data[position + 3]) << 24);
+    return static_cast<int32_t>(bits);
 }
 
 std::vector<uint8_t> makeConnectRequest()
@@ -61,22 +71,22 @@ std::vector<uint8_t> makeInput(uint8_t keys)
     return {messageId(MessageType::Input), keys};
 }
 
-std::vector<uint8_t> makeEntityUpdate(uint16_t id, int16_t x, int16_t y)
+std::vector<uint8_t> makeEntityUpdate(uint16_t id, int32_t x, int32_t y)
 {
     std::vector<uint8_t> data = {messageId(MessageType::EntityUpdate)};
     write16(data, id);
-    write16(data, static_cast<uint16_t>(x));
-    write16(data, static_cast<uint16_t>(y));
+    write32(data, x);
+    write32(data, y);
     return data;
 }
 
-std::vector<uint8_t> makeEntitySpawn(uint16_t id, uint8_t kind, int16_t x, int16_t y)
+std::vector<uint8_t> makeEntitySpawn(uint16_t id, uint8_t kind, int32_t x, int32_t y)
 {
     std::vector<uint8_t> data = {messageId(MessageType::EntitySpawn)};
     write16(data, id);
     data.push_back(kind);
-    write16(data, static_cast<uint16_t>(x));
-    write16(data, static_cast<uint16_t>(y));
+    write32(data, x);
+    write32(data, y);
     return data;
 }
 
@@ -97,8 +107,8 @@ std::vector<uint8_t> makeWorldSnapshot(const std::vector<Entity>& entities)
     for (const Entity& entity : entities) {
         write16(data, entity.id);
         data.push_back(entity.kind);
-        write16(data, static_cast<uint16_t>(entity.x));
-        write16(data, static_cast<uint16_t>(entity.y));
+        write32(data, entity.x);
+        write32(data, entity.y);
     }
     return data;
 }
@@ -152,20 +162,20 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
             break;
 
         case MessageType::EntityUpdate:
-            if (data.size() != 7)
+            if (data.size() != 11)
                 return std::nullopt;
             packet.id = read16(data, 1);
             packet.x = readPosition(data, 3);
-            packet.y = readPosition(data, 5);
+            packet.y = readPosition(data, 7);
             break;
 
         case MessageType::EntitySpawn:
-            if (data.size() != 8 || data[3] < 1 || data[3] > 4)
+            if (data.size() != 12 || data[3] < 1 || data[3] > 4)
                 return std::nullopt;
             packet.id = read16(data, 1);
             packet.value = data[3];
             packet.x = readPosition(data, 4);
-            packet.y = readPosition(data, 6);
+            packet.y = readPosition(data, 8);
             break;
 
         case MessageType::EntityDestroy:
@@ -176,17 +186,17 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
 
         case MessageType::WorldSnapshot: {
             if (data.size() < 2 || data[1] > 100 ||
-                data.size() != 2 + static_cast<size_t>(data[1]) * 7)
+                data.size() != 2 + static_cast<size_t>(data[1]) * 11)
                 return std::nullopt;
             for (size_t i = 0; i < data[1]; i++) {
-                size_t pos = 2 + i * 7;
+                size_t pos = 2 + i * 11;
                 if (data[pos + 2] < 1 || data[pos + 2] > 4)
                     return std::nullopt;
                 Entity entity;
                 entity.id = read16(data, pos);
                 entity.kind = data[pos + 2];
                 entity.x = readPosition(data, pos + 3);
-                entity.y = readPosition(data, pos + 5);
+                entity.y = readPosition(data, pos + 7);
                 packet.entities.push_back(entity);
             }
             break;

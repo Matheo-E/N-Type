@@ -45,9 +45,9 @@ as the form defaults. The window can be freely resized or maximized; press **F11
 to enter or leave fullscreen mode. The game window has the same controls. Both
 windows preserve their aspect ratio so text and graphics are never stretched.
 After the connection form, the client displays a lobby browser: join the local
-lobby on the left, or create one on the right by choosing its name, capacity and
-one of three map previews. This is currently a UI preview over the single game
-server; lobby isolation and real map loading are not part of the network protocol yet.
+lobby on the left, or create one on the right by choosing its name, capacity,
+then start the single automatic adventure. There is no map or ambience selection;
+lobby isolation is not part of the network protocol yet.
 Multiplayer rooms only enable **Enter game** once their displayed capacity is full.
 Use **Play solo** to start immediately without creating a lobby.
 
@@ -57,8 +57,14 @@ Linux and Windows clients use the same binary protocol and can join the same ser
 Allow inbound **UDP 4242** on the server firewall. Internet hosting also requires
 appropriate router/hosting configuration; a LAN address is only reachable on that LAN.
 
-- Move your square: arrows, WASD or ZQSD. Space sends "fire" (not used by the server yet).
-- Quit: Escape or the window close button.
+- Move your tooth: arrows, WASD or ZQSD. Its sprite animates while moving. Space sends "fire" (not used by the server yet).
+- Pause menu: Escape or the menu icon. It can resume, restart, return to the lobby,
+  or toggle music. Close the window to quit.
+- Music loops automatically: `lobby.mp3` in the launcher, then `ice.mp3`,
+  `candy.mp3`, or `doctor.mp3` according to the current automatic level. The Son ON/OFF
+  preference is retained when restarting or returning to the lobby.
+- Lobby, gameplay and restart reuse the same SFML window. The active music is
+  stopped before the next screen starts, so tracks never overlap.
 - The window title identifies your player and connection status.
 - A fifth player waits with a "Server full" status and retries automatically.
 - Before connecting, or after a connection timeout, no squares are displayed.
@@ -78,6 +84,27 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 | [Protocol.cpp](common/protocol/Protocol.cpp) | Binary encoding and decoding of every message ([PROTOCOL_v2.md](docs/PROTOCOL_v2.md)) |
 | [GameConfig.hpp](shared/GameConfig.hpp) | Settings both sides agree on: port, world size, speed, player count |
 | [Options.hpp](shared/Options.hpp) | Shared command-line parsing |
+
+## Parallax backgrounds
+
+The single adventure starts with `01_glacons`, changes to `02_sucreries` after
+3 minutes, then to `03_dentiste_fou` after 6 minutes. Level 3 remains active until
+a real boss-driven transition is implemented. Independently, ambience alternates
+between `jour` and `nuit` every 2 minutes. Every ambience is assembled in this
+order: `01_lointain.png`, `02_moyen.png`, `03_proche.png`, then `04_sol.png`.
+The layers repeat horizontally and follow the local player with different speed
+factors, while server positions and collision bounds remain authoritative.
+
+Background configuration is centralized in
+`client/src/BackgroundConfig.hpp`. To tune the scrolling, edit
+`kParallaxFactors`. Timing is controlled by `kDayNightPeriodSeconds` and
+`kTemporaryLevelDurationSeconds`. To add a level, add its folder to `kLevelFolders`,
+its soundtrack to `kMusicFiles`, and provide both ambience folders with the four
+layers and an `_apercu.png`.
+
+The source strips repeat as supplied. The renderer remains gap-free at every
+distance, but a visible artwork seam may occur if replacement images do not have
+matching left and right edges.
 
 The server uses **two threads**: a network thread runs Asio and queues every received
 datagram, and the main thread runs the game loop at 60 ticks/s, reads that queue each
@@ -106,8 +133,10 @@ then the payload, little-endian. This demo uses these messages:
 Messages 6–8, 10 and 12 (entity spawn/update/destroy, player events, game state) are
 not used yet. Keys: up=1, down=2, left=4, right=8, shoot=16. Players 1–4 are blue,
 orange, green and pink; a freed id is reused by the next player. Positions refer to
-the square's top-left corner, within x=0…1240, y=0…680 in a 1280×720 window, with
-40×40 squares moving at 300 pixels/s. Invalid packets are ignored.
+the entity's top-left corner. Y stays within 0…680 in the 1280×720 viewport, with
+40×40 entities moving at 300 pixels/s. The vertical position is limited to the
+viewport and the level has a left edge at x=0, but horizontal progression to the
+right is not tied to the viewport or background width. Invalid packets are ignored.
 
 ## Verification
 
@@ -119,7 +148,8 @@ ctest --test-dir build/client-linux-release --output-on-failure
 python3 tests/network_smoke.py ./r-type_server
 ```
 
-They check connection, up to four players, independent movement, malformed packets,
-refusal of a fifth player, repeated connects, disconnects, id reuse and crash timeouts.
+They check connection, movement beyond the old viewport edge and back, up to four
+players, independent movement, malformed packets, refusal of a fifth player,
+repeated connects, disconnects, id reuse and crash timeouts.
 For the window, start two real clients and check that the second square appears
 and disappears as the other client connects and quits.

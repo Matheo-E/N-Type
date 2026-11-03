@@ -20,8 +20,8 @@ int main()
     auto input = decode(makeInput(keys));
     assert(input && input->value == 24);
 
-    auto update = decode(makeEntityUpdate(250, -30, 450));
-    assert(update && update->id == 250 && update->x == -30 && update->y == 450);
+    auto update = decode(makeEntityUpdate(250, 150000, 450));
+    assert(update && update->id == 250 && update->x == 150000 && update->y == 450);
 
     auto spawn = decode(makeEntitySpawn(251, 2, 800, 200));
     assert(spawn && spawn->id == 251 && spawn->value == 2 && spawn->x == 800);
@@ -29,10 +29,10 @@ int main()
     auto destroy = decode(makeEntityDestroy(251));
     assert(destroy && destroy->id == 251);
 
-    std::vector<Entity> entities = {{1, 1, 100, 200}, {251, 2, -30, 450}};
+    std::vector<Entity> entities = {{1, 1, 100, 200}, {251, 2, 150000, 450}};
     auto snapshot = decode(makeWorldSnapshot(entities));
     assert(snapshot && snapshot->entities.size() == 2);
-    assert(snapshot->entities[1].id == 251 && snapshot->entities[1].x == -30);
+    assert(snapshot->entities[1].id == 251 && snapshot->entities[1].x == 150000);
     assert(decode(makeWorldSnapshot({}))->entities.empty());
 
     auto event = decode(makePlayerEvent(2, 1));

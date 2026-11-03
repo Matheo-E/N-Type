@@ -19,7 +19,7 @@ def parse(kind, payload):
     if kind == SNAPSHOT:
         players = {}
         for index in range(payload[0]):
-            entity, entity_kind, x, y = struct.unpack_from('<HBhh', payload, 1 + 7 * index)
+            entity, entity_kind, x, y = struct.unpack_from('<HBii', payload, 1 + 11 * index)
             assert entity_kind == PLAYER_KIND
             players[entity] = (x, y)
         return dict(players=players)
@@ -84,6 +84,16 @@ def check(binary):
         alone = first.wait(SNAPSHOT)
         assert alone['players'] == {1: SPAWNS[1]}
 
+        # Horizontal progression is not limited by the 1280-pixel viewport.
+        first.input(RIGHT)
+        beyond_old_edge = first.wait(
+            SNAPSHOT, lambda s: s['players'][1][0] > 1500, timeout=6)
+        assert beyond_old_edge['players'][1][0] > 1500
+        first.input(LEFT)
+        returned = first.wait(SNAPSHOT, lambda s: s['players'][1][0] <= 100, timeout=6)
+        assert returned['players'][1][0] <= 100
+        first.input(0)
+
         # Malformed packets, or a server-only message from a stranger, must not create a player.
         fifth.socket.send(b'garbage')
         fifth.socket.send(bytes([CONNECT, 0]))
@@ -139,8 +149,8 @@ def check(binary):
                 continue
         assert timed_out, 'Crashed peers did not disappear'
         assert server.poll() is None
-        print('PASS: connect, four players, full server, malformed packets, independent movement,')
-        print('      repeated connect, disconnect, id reuse and crash timeout.')
+        print('PASS: unlimited rightward movement, return movement, four players, malformed packets,')
+        print('      independent movement, disconnect, id reuse and crash timeout.')
     finally:
         for peer in peers:
             peer.close()

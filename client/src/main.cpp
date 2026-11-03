@@ -12,13 +12,26 @@ int main(int argc, char** argv) {
             std::cout << "Usage: r-type_client [-n name] [-h host] [-p port]\n"
                          "Default server: 127.0.0.1:4242\n"
                          "Move your square: arrows, WASD or ZQSD\n"
-                         "Quit: Escape or close the window\n";
+                         "Pause menu: Escape | Quit: close the window\n";
             return 0;
         }
-        const auto settings = ntype::client::show_launcher({options.name, options.host, options.port});
-        if (!settings) return 0;
-        ntype::client::ClientApp app(settings->name, settings->host, settings->port);
-        app.run();
+        sf::RenderWindow window;
+        bool fullscreen = false;
+        auto settings = ntype::client::show_launcher(
+            window, fullscreen, {options.name, options.host, options.port});
+        while (settings && window.isOpen()) {
+            ntype::client::GameExitAction action;
+            {
+                ntype::client::ClientApp app(window, fullscreen, settings->name, settings->host,
+                                         settings->port, settings->music_enabled);
+                action = app.run();
+                settings->music_enabled = app.music_enabled();
+            } // Stops and destroys the level music before changing screens.
+            if (action == ntype::client::GameExitAction::Quit) break;
+            if (action == ntype::client::GameExitAction::Lobby)
+                settings = ntype::client::show_launcher(window, fullscreen, *settings, true);
+            // Restart keeps the same settings and creates a fresh server connection.
+        }
     } catch (const std::exception& error) {
         std::cerr << "Client error: " << error.what() << '\n';
         return 1;

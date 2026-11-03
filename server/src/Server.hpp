@@ -38,6 +38,12 @@ private:
     void on_connect(const asio::ip::udp::endpoint& from);
     void remove(const asio::ip::udp::endpoint& from, const char* reason);
     void drop_timed_out();
+    /**
+     * @brief Applies player inputs and enforces only explicit world boundaries.
+     *
+     * X is bounded at the level start (zero) but deliberately has no viewport-based
+     * right edge. Y remains constrained to the playable window height.
+     */
     void move_players();
     void broadcast(const std::vector<std::uint8_t>& data);
     void broadcast_snapshot();

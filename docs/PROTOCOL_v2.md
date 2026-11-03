@@ -19,7 +19,7 @@ Every message begins with **1 byte identifying its type**, followed by the field
 | --- | ---: | --- |
 | `uint8_t` | 1 byte | Number from 0 to 255 |
 | `uint16_t` | 2 bytes | Unsigned ID, stored **little-endian** |
-| `int16_t` | 2 bytes | Signed position from -32768 to 32767, stored **little-endian** |
+| `int32_t` | 4 bytes | Signed world position, stored **little-endian** |
 
 **Little-endian** means the lower byte is written first. For example, entity ID `251` is encoded as `FB 00` (hexadecimal). Each UDP datagram contains **one complete message**. There is no additional protocol header or version number in this MVP.
 
@@ -32,15 +32,15 @@ Every message begins with **1 byte identifying its type**, followed by the field
 | 3 | `ConnectRefuse` | Server → Client | `reason` (`uint8_t`) | 2 bytes |
 | 4 | `Disconnect` | Client → Server | None | 1 byte |
 | 5 | `Input` | Client → Server | `keys` (`uint8_t`) | 2 bytes |
-| 6 | `EntityUpdate` | Server → Client | `id`, `x`, `y` (`uint16_t`, `int16_t`, `int16_t`) | 7 bytes |
-| 7 | `EntitySpawn` | Server → Client | `id`, `kind`, `x`, `y` | 8 bytes |
+| 6 | `EntityUpdate` | Server → Client | `id`, `x`, `y` (`uint16_t`, `int32_t`, `int32_t`) | 11 bytes |
+| 7 | `EntitySpawn` | Server → Client | `id`, `kind`, `x`, `y` | 12 bytes |
 | 8 | `EntityDestroy` | Server → Client | `id` (`uint16_t`) | 3 bytes |
-| 9 | `WorldSnapshot` | Server → Client | `count` + `count` entities | `2 + count × 7` bytes |
+| 9 | `WorldSnapshot` | Server → Client | `count` + `count` entities | `2 + count × 11` bytes |
 | 10 | `PlayerEvent` | Server → Client | `playerId`, `event` (`uint8_t` each) | 3 bytes |
 | 11 | `ClientLeft` | Server → Client | `playerId` (`uint8_t`) | 2 bytes |
 | 12 | `GameStateChange` | Server → Client | `state` (`uint8_t`) | 2 bytes |
 
-`EntitySpawn` fields are: `id` (2 bytes), `kind` (1 byte), `x` (2 bytes), `y` (2 bytes). A `WorldSnapshot` entity uses the **same 7-byte layout**, without the message type.
+`EntitySpawn` fields are: `id` (2 bytes), `kind` (1 byte), `x` (4 bytes), `y` (4 bytes). A `WorldSnapshot` entity uses the **same 11-byte layout**, without the message type.
 
 ## 3. Values used in messages
 

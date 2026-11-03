@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 find_package(asio CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # Binary protocol shared by the client and the server (docs/PROTOCOL_v2.md).
@@ -26,7 +27,7 @@ endif()
 
 # ECS engine (engine/, owned by the engine branch): both executables run on it.
 # It is written against SFML 2.6, so the server needs SFML too.
-find_package(SFML 2.6 CONFIG REQUIRED COMPONENTS graphics window system)
+find_package(SFML 2.6 CONFIG REQUIRED COMPONENTS graphics window system audio)
 add_library(ntype_engine STATIC engine/src/Factory.cpp engine/src/System.cpp)
 target_include_directories(ntype_engine PUBLIC "${CMAKE_SOURCE_DIR}/engine/include")
 target_link_libraries(ntype_engine PUBLIC sfml-graphics sfml-window sfml-system)
