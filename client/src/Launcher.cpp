@@ -70,7 +70,7 @@ void draw_map_preview(sf::RenderWindow& window, const sf::Texture& texture,
  * @brief Draws one region of a sprite sheet inside a destination rectangle.
  *
  * The source rectangle keeps the transparent pixels surrounding each login
- * element, which preserves the soft shadows from login.png.
+ * element, which preserves the soft shadows from the login sprite sheet.
  *
  * @param window Render target receiving the sprite.
  * @param texture Sprite sheet containing the requested element.
@@ -90,7 +90,7 @@ void draw_texture_region(sf::RenderWindow& window, const sf::Texture& texture,
  * @brief Fills an area with a texture while preserving its aspect ratio.
  *
  * The excess part of the image is cropped symmetrically. This avoids stretching
- * background.png when the launcher is resized or displayed fullscreen.
+ * launcher background when the window is resized or displayed fullscreen.
  *
  * @param window Render target receiving the background.
  * @param texture Background texture to draw.
@@ -212,14 +212,14 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
     sf::Texture login_sheet;
     sf::Texture login_background;
     const std::string asset_directory = NTYPE_ASSET_DIR;
-    if (!login_sheet.loadFromFile(asset_directory + "/login.png") ||
-        !login_background.loadFromFile(asset_directory + "/background.png"))
+    if (!login_sheet.loadFromFile(asset_directory + "/ui/login_sheet.png") ||
+        !login_background.loadFromFile(asset_directory + "/ui/launcher_background.png"))
         return std::nullopt;
     login_sheet.setSmooth(true);
     login_background.setSmooth(true);
     sf::Music lobby_music;
     if (defaults.music_enabled &&
-        lobby_music.openFromFile(std::string(NTYPE_ASSET_DIR) + "/music/lobby.mp3")) {
+        lobby_music.openFromFile(std::string(NTYPE_ASSET_DIR) + "/audio/music/lobby.mp3")) {
         lobby_music.setLoop(true);
         lobby_music.setVolume(40.f);
         lobby_music.play();

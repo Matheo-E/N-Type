@@ -20,8 +20,9 @@ build.bat       rem Windows Command Prompt
 
 The scripts build and copy both executables to the repository root. They support
 `--debug`, `--clean` and `--help`. vcpkg provides SFML 2.6 (window/graphics) and Asio
-(network); there is no audio, external asset or menu. On Windows, keep the
-copied DLLs next to the executables. In PowerShell, prefix commands with `.\`.
+(network); SFML audio loads the music and sound effects stored under `assets/`.
+On Windows, keep the copied DLLs next to the executables. In PowerShell, prefix
+commands with `.\`.
 
 ## Run
 
@@ -60,9 +61,10 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 - Move your tooth: arrows, WASD or ZQSD. Its sprite animates while moving. Space sends "fire" (not used by the server yet).
 - Pause menu: Escape or the menu icon. It can resume, restart, return to the lobby,
   or toggle music. Close the window to quit.
-- Music loops automatically: `lobby.mp3` in the launcher, then `ice.mp3`,
-  `candy.mp3`, or `doctor.mp3` according to the current automatic level. The Son ON/OFF
-  preference is retained when restarting or returning to the lobby.
+- Music loops automatically: `audio/music/lobby.mp3` in the launcher, then
+  `level_01_ice.mp3`, `level_02_candy.mp3`, or `level_03_dentist_lab.mp3`
+  according to the current automatic level. The Son ON/OFF preference is
+  retained when restarting or returning to the lobby.
 - Lobby, gameplay and restart reuse the same SFML window. The active music is
   stopped before the next screen starts, so tracks never overlap.
 - The window title identifies your player and connection status.
@@ -84,14 +86,25 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 | [Protocol.cpp](common/protocol/Protocol.cpp) | Binary encoding and decoding of every message ([PROTOCOL_v2.md](docs/PROTOCOL_v2.md)) |
 | [GameConfig.hpp](shared/GameConfig.hpp) | Settings both sides agree on: port, world size, speed, player count |
 | [Options.hpp](shared/Options.hpp) | Shared command-line parsing |
+| [assets/](assets/) | Organized backgrounds, sprites, UI sheets, music and sound effects |
+
+## Asset organization
+
+All runtime resources live under a single `assets/` root. Backgrounds are kept
+by level and ambience under `backgrounds/`; player, enemy and effect sprite sheets
+are under `sprites/`; launcher and pause-menu sheets are under `ui/`; music and
+sound effects are under `audio/`. See [assets/README.md](assets/README.md) for the
+complete layout and naming rules.
 
 ## Parallax backgrounds
 
-The single adventure starts with `01_glacons`, changes to `02_sucreries` after
-3 minutes, then to `03_dentiste_fou` after 6 minutes. Level 3 remains active until
-a real boss-driven transition is implemented. Independently, ambience alternates
-between `jour` and `nuit` every 2 minutes. Every ambience is assembled in this
-order: `01_lointain.png`, `02_moyen.png`, `03_proche.png`, then `04_sol.png`.
+The single adventure progresses through `level_01_ice`, `level_02_candy`, then
+`level_03_dentist_lab`. Level 3 remains active until a real boss-driven transition
+is implemented. Independently, the ambience alternates between `day` and `night`.
+The current short test timings are defined by `kTemporaryLevelDurationSeconds`
+and `kDayNightPeriodSeconds`. Every ambience is assembled in this order:
+`layer_01_far.png`, `layer_02_middle.png`, `layer_03_near.png`, then
+`layer_04_ground.png`.
 The layers repeat horizontally and combine the local camera with a continuous,
 time-based scroll. Each layer uses a different speed factor, so the scenery keeps
 moving even while the player is stationary. Server positions and collision bounds
@@ -107,8 +120,9 @@ Background configuration is centralized in
 zero to return to camera-only scrolling. Timing is controlled by `kDayNightPeriodSeconds` and
 `kTemporaryLevelDurationSeconds`; development builds can use shorter values for
 testing. Fade length is controlled by `kDayNightFadeDurationSeconds`. To add a
-level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, and
-provide both ambience folders with the four layers and an `_apercu.png`.
+level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, its
+preview names to `kPreviewFiles`, and provide both ambience folders with the four
+ordered layers and a `preview.png` or `preview.jpg`.
 
 The source strips repeat as supplied. The renderer remains gap-free at every
 distance, but a visible artwork seam may occur if replacement images do not have

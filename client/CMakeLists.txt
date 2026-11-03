@@ -7,7 +7,7 @@ add_executable(r-type_client
 target_link_libraries(r-type_client PRIVATE ntype_shared ntype_engine
     "$<LINK_GROUP:RESCAN,sfml-audio,OpenAL::OpenAL,fmt::fmt>")
 target_compile_definitions(r-type_client PRIVATE
-    NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assetes_true_folder_for_true_game")
+    NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
 
 if(MSVC)
     target_compile_options(r-type_client PRIVATE /W4 /permissive- /utf-8)

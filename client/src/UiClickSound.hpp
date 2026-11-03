@@ -30,8 +30,8 @@ public:
 
 private:
     UiClickSound() {
-        const std::string path = std::string(NTYPE_ASSET_DIR) +
-            "/COMCam_Instamatic declenchement 1 (ID 2821)_LaSonotheque.fr.mp3";
+        const std::string path =
+            std::string(NTYPE_ASSET_DIR) + "/audio/sfx/button_click.mp3";
         if (!buffer_.loadFromFile(path))
             throw std::runtime_error("Unable to load UI click sound: " + path);
         sound_.setBuffer(buffer_);

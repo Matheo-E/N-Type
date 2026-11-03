@@ -44,10 +44,12 @@ ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::stri
     : name_(name), network_(host, port), window_(window), fullscreen_(fullscreen),
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
-    if (!player_texture_.loadFromFile(asset_dir + "/dent.png"))
-        throw std::runtime_error("Unable to load dent.png");
-    if (!menu_texture_.loadFromFile(asset_dir + "/menu.png"))
-        throw std::runtime_error("Unable to load menu.png");
+    const std::string player_path = asset_dir + "/sprites/player/tooth.png";
+    const std::string menu_path = asset_dir + "/ui/pause_menu_sheet.png";
+    if (!player_texture_.loadFromFile(player_path))
+        throw std::runtime_error("Unable to load player sprite: " + player_path);
+    if (!menu_texture_.loadFromFile(menu_path))
+        throw std::runtime_error("Unable to load pause menu sprite sheet: " + menu_path);
     load_background(0, 0);
     create_window();
     if (!transition_frame_.create(config::kWidth, config::kHeight))
@@ -374,7 +376,7 @@ void ClientApp::draw_parallax() {
 }
 
 /**
- * @brief Draws the pause controls by cropping the supplied menu.png spritesheet.
+ * @brief Draws the pause controls by cropping the pause-menu sprite sheet.
  *
  * Pausing suppresses local input but networking continues, which keeps a
  * multiplayer client connected and allows other players to keep moving.
