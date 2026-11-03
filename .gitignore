@@ -1,0 +1,20 @@
+# Generated files and dependencies
+/build/
+/out/
+/vcpkg/
+/vcpkg_installed/
+/vcpkg-cache/
+CMakeUserPresets.json
+/r-type_client
+/r-type_server
+*.exe
+*.dll
+
+# Editors
+/.vscode/
+/.idea/
+/.vs/
+*.swp
+
+# Python test cache
+__pycache__/

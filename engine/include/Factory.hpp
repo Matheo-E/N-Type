@@ -1,0 +1,13 @@
+#pragma once
+
+#include "World.hpp"
+
+int CreateE(World& world);
+int CreateEPlayer(World& world, sf::Vector2f pos);
+// Builds an enemy from its entry in world.EnemyTypes. Returns -1 if enemyid is unknown.
+int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid);
+int CreateEBullet(World& world, int spawnerid);
+// One enemy that follows parentid. Building a whole train (the loop, and following
+// the parent's past positions) is a system's job: functions take at most 4 parameters.
+int CreateEEnemyFollower(World& world, sf::Vector2f pos, int enemyid, int parentid);
+int CreateEStatic(World& world, sf::Vector2f pos);

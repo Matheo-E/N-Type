@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, client/refonte]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build client and server (${{ matrix.preset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux-release
+          - os: windows-latest
+            preset: windows-release
+    env:
+      # Not VCPKG_ROOT: the MSVC setup exports its own VCPKG_ROOT (the copy
+      # bundled with Visual Studio), so ours is set once that step has run.
+      VCPKG_DIR: ${{ github.workspace }}/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build autoconf automake autoconf-archive libtool \
+            libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxext-dev libxrender-dev \
+            libxinerama-dev libudev-dev libgl1-mesa-dev libglu1-mesa-dev libegl1-mesa-dev
+
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress --yes
+
+      - name: Read the vcpkg baseline
+        id: baseline
+        shell: bash
+        run: echo "commit=$(jq -r '.["builtin-baseline"]' vcpkg.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch vcpkg at the pinned baseline
+        shell: bash
+        run: |
+          # vcpkg's version database references historical Git tree objects.
+          # A partial clone may try to download them during Configure, making
+          # an otherwise cached build fail if that lazy fetch is interrupted.
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
+          git -C "$VCPKG_DIR" checkout ${{ steps.baseline.outputs.commit }}
+          mkdir -p vcpkg-cache
+
+      - name: Bootstrap vcpkg (Linux)
+        if: runner.os == 'Linux'
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Use the pinned vcpkg
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_DIR" >> "$GITHUB_ENV"
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.preset }}-
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test the protocol
+        run: ctest --test-dir build/client-${{ matrix.preset }} --output-on-failure
+
+      - name: Check executable help
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./build/client-${{ matrix.preset }}/bin/r-type_client.exe --help
+            ./build/client-${{ matrix.preset }}/bin/r-type_server.exe --help
+          else
+            ./build/client-${{ matrix.preset }}/bin/r-type_client --help
+            ./build/client-${{ matrix.preset }}/bin/r-type_server --help
+          fi
+
+      - name: Test two-player server
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            python tests/network_smoke.py ./build/client-${{ matrix.preset }}/bin/r-type_server.exe
+          else
+            python3 tests/network_smoke.py ./build/client-${{ matrix.preset }}/bin/r-type_server
+          fi
