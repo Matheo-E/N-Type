@@ -6,9 +6,9 @@ add_executable(r-type_client
 )
 target_link_libraries(r-type_client PRIVATE ntype_shared ntype_engine)
 if(MSVC)
-    # link.exe resolves static libraries without GNU-style archive groups.
-    target_link_libraries(r-type_client PRIVATE
-        sfml-audio OpenAL::OpenAL fmt::fmt)
+    # The Windows vcpkg triplet provides SFML as shared libraries, so its
+    # private OpenAL dependency is not exported to consumers.
+    target_link_libraries(r-type_client PRIVATE sfml-audio)
 else()
     target_link_libraries(r-type_client PRIVATE
         "$<LINK_GROUP:RESCAN,sfml-audio,OpenAL::OpenAL,fmt::fmt>")
