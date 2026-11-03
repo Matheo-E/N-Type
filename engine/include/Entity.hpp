@@ -2,8 +2,8 @@
 
 class Entity {
     private:
-        int E_Id;
+        int EId;
     public:
-        explicit Entity(int id) : E_Id(id){}
-        int Get_Id() const {return E_Id;}
+        explicit Entity(int id) : EId(id){}
+        int GetId() const {return EId;}
 };

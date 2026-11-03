@@ -9,7 +9,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 find_package(asio CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(nlohmann_json 3 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(SFML 2.6 CONFIG REQUIRED COMPONENTS graphics window system audio)
 
 # Binary protocol shared by the client and the server (docs/PROTOCOL_v2.md).
 add_library(ntype_protocol STATIC common/protocol/Protocol.cpp)
@@ -25,12 +27,19 @@ if(WIN32)
     target_link_libraries(ntype_shared INTERFACE ws2_32 mswsock)
 endif()
 
-# ECS engine (engine/, owned by the engine branch): both executables run on it.
-# It is written against SFML 2.6, so the server needs SFML too.
-find_package(SFML 2.6 CONFIG REQUIRED COMPONENTS graphics window system audio)
-add_library(ntype_engine STATIC engine/src/Factory.cpp engine/src/System.cpp)
+# Shared ECS engine used by both network executables.
+add_library(ntype_engine STATIC
+    engine/src/Behaviour.cpp
+    engine/src/Combat.cpp
+    engine/src/Factory.cpp
+    engine/src/Loader.cpp
+    engine/src/System.cpp
+)
 target_include_directories(ntype_engine PUBLIC "${CMAKE_SOURCE_DIR}/engine/include")
-target_link_libraries(ntype_engine PUBLIC sfml-graphics sfml-window sfml-system)
+target_link_libraries(ntype_engine
+    PUBLIC sfml-graphics sfml-window sfml-system
+    PRIVATE nlohmann_json::nlohmann_json
+)
 
 option(NTYPE_BUILD_CLIENT "Build the graphical client" ON)
 if(NTYPE_BUILD_CLIENT)
