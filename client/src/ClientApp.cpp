@@ -289,7 +289,7 @@ void ClientApp::sync_world() {
     for (const auto& player : players) {
         auto [it, added] = entities_.try_emplace(player.id, 0);
         if (added) {
-            it->second = Create_E(world_);
+            it->second = CreateE(world_);
         }
         // The server is authoritative: positions are copied, never simulated here.
         world_.Positions[it->second].Xy = {static_cast<float>(player.x), static_cast<float>(player.y)};

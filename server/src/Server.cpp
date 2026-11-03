@@ -101,7 +101,7 @@ void Server::on_connect(const asio::ip::udp::endpoint& from) {
 
     Player player;
     player.id = id;
-    player.entity = Create_E(world_);
+    player.entity = CreateE(world_);
     world_.Positions[player.entity].Xy = {100.0F, 150.0F + 120.0F * static_cast<float>(id - 1)};
     world_.Velocities[player.entity];
     player.last_seen = Clock::now();

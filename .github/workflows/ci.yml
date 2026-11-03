@@ -42,6 +42,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress --yes
+
       - name: Read the vcpkg baseline
         id: baseline
         shell: bash
@@ -50,7 +54,10 @@ jobs:
       - name: Fetch vcpkg at the pinned baseline
         shell: bash
         run: |
-          git clone --filter=tree:0 https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
+          # vcpkg's version database references historical Git tree objects.
+          # A partial clone may try to download them during Configure, making
+          # an otherwise cached build fail if that lazy fetch is interrupted.
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
           git -C "$VCPKG_DIR" checkout ${{ steps.baseline.outputs.commit }}
           mkdir -p vcpkg-cache
 
