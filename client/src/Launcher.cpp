@@ -13,6 +13,7 @@
 
 #include "BackgroundConfig.hpp"
 #include "Protocol.hpp"
+#include "UiClickSound.hpp"
 
 namespace ntype::client {
 namespace {
@@ -202,6 +203,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                                                 const bool open_browser) {
     auto font = load_font();
     if (!font) return std::nullopt;
+    auto& click_sound = UiClickSound::instance();
     sf::Texture adventure_preview;
     if (!adventure_preview.loadFromFile(
             background::preview_path(NTYPE_ASSET_DIR, {0, 0})))
@@ -292,15 +294,20 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                 update_letterbox_view(window);
             }
             if (event.type == sf::Event::Resized) update_letterbox_view(window);
-            if (event.type == sf::Event::MouseButtonPressed) {
+            if (event.type == sf::Event::MouseButtonPressed &&
+                event.mouseButton.button == sf::Mouse::Left) {
                 const sf::Vector2f point =
                     window.mapPixelToCoords({event.mouseButton.x, event.mouseButton.y});
                 if (page == Page::Connection) {
                     for (std::size_t i = 0; i < connection_fields.size(); ++i)
                         if (connection_fields[i].bounds.contains(point)) active = i;
-                    if (connection_button.contains(point)) connect();
+                    if (connection_button.contains(point)) {
+                        click_sound.play();
+                        connect();
+                    }
                 } else if (page == Page::Browser) {
                     if (join_button.contains(point)) {
+                        click_sound.play();
                         if (lobby_created) {
                             current_players = 1;
                         } else {
@@ -311,10 +318,12 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                         page = Page::Waiting;
                     }
                     if (create_button.contains(point)) {
+                        click_sound.play();
                         active = 0;
                         page = Page::Create;
                     }
                     if (solo_button.contains(point)) {
+                        click_sound.play();
                         if (server_is_reachable(host, selected_port, error)) {
                             return ConnectionSettings{player_name, host, selected_port,
                                                       defaults.music_enabled};
@@ -322,9 +331,18 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                     }
                 } else if (page == Page::Create) {
                     if (lobby_fields[0].bounds.contains(point)) active = 0;
-                    if (sf::FloatRect(170.f, 325.f, 70.f, 30.f).contains(point) && lobby_size > 2) --lobby_size;
-                    if (sf::FloatRect(430.f, 325.f, 70.f, 30.f).contains(point) && lobby_size < 4) ++lobby_size;
+                    if (sf::FloatRect(170.f, 325.f, 70.f, 30.f).contains(point) &&
+                        lobby_size > 2) {
+                        click_sound.play();
+                        --lobby_size;
+                    }
+                    if (sf::FloatRect(430.f, 325.f, 70.f, 30.f).contains(point) &&
+                        lobby_size < 4) {
+                        click_sound.play();
+                        ++lobby_size;
+                    }
                     if (sf::FloatRect(170.f, 350.f, 330.f, 45.f).contains(point)) {
+                        click_sound.play();
                         if (lobby_fields[0].value.empty()) error = "Lobby name must not be empty.";
                         else {
                             lobby_name = lobby_fields[0].value;
@@ -336,6 +354,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                     }
                 } else if (page == Page::Waiting && button.contains(point) &&
                            current_players == lobby_size) {
+                    click_sound.play();
                     if (server_is_reachable(host, selected_port, error)) {
                         return ConnectionSettings{player_name, host, selected_port,
                                                   defaults.music_enabled};

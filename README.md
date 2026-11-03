@@ -94,13 +94,17 @@ between `jour` and `nuit` every 2 minutes. Every ambience is assembled in this
 order: `01_lointain.png`, `02_moyen.png`, `03_proche.png`, then `04_sol.png`.
 The layers repeat horizontally and follow the local player with different speed
 factors, while server positions and collision bounds remain authoritative.
+Day/night changes use a smooth six-second crossfade. The incoming four-layer
+scene is preloaded and composited before blending, so transparent foregrounds
+do not flicker or fade at different apparent speeds.
 
 Background configuration is centralized in
 `client/src/BackgroundConfig.hpp`. To tune the scrolling, edit
 `kParallaxFactors`. Timing is controlled by `kDayNightPeriodSeconds` and
-`kTemporaryLevelDurationSeconds`. To add a level, add its folder to `kLevelFolders`,
-its soundtrack to `kMusicFiles`, and provide both ambience folders with the four
-layers and an `_apercu.png`.
+`kTemporaryLevelDurationSeconds`; development builds can use shorter values for
+testing. Fade length is controlled by `kDayNightFadeDurationSeconds`. To add a
+level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, and
+provide both ambience folders with the four layers and an `_apercu.png`.
 
 The source strips repeat as supplied. The renderer remains gap-free at every
 distance, but a visible artwork seam may occur if replacement images do not have

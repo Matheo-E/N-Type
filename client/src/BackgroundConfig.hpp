@@ -12,6 +12,10 @@ inline constexpr std::size_t kAmbienceCount = 2;
 inline constexpr std::size_t kLayerCount = 4;
 inline constexpr float kDayNightPeriodSeconds = 60.f;
 inline constexpr float kTemporaryLevelDurationSeconds = 120.f;
+/** Duration of the smooth crossfade between day and night backgrounds. */
+inline constexpr float kDayNightFadeDurationSeconds = 6.f;
+static_assert(kDayNightFadeDurationSeconds > 0.f &&
+              kDayNightFadeDurationSeconds < kDayNightPeriodSeconds);
 
 inline constexpr std::array<const char*, kLevelCount> kLevelFolders{
     "01_glacons", "02_sucreries", "03_dentiste_fou"};
@@ -33,6 +37,21 @@ struct Selection {
     std::size_t level = 0;
     std::size_t ambience = 0;
 };
+
+/**
+ * @brief Computes the eased opacity of the incoming day/night background.
+ * @param elapsed_seconds Time elapsed since the crossfade started.
+ * @return Smoothstep progress clamped between zero and one.
+ */
+inline constexpr float day_night_fade_progress(const float elapsed_seconds) {
+    const float linear_progress = std::clamp(
+        elapsed_seconds / kDayNightFadeDurationSeconds, 0.f, 1.f);
+    return linear_progress * linear_progress * (3.f - 2.f * linear_progress);
+}
+
+static_assert(day_night_fade_progress(-1.f) == 0.f);
+static_assert(day_night_fade_progress(kDayNightFadeDurationSeconds / 2.f) == 0.5f);
+static_assert(day_night_fade_progress(kDayNightFadeDurationSeconds) == 1.f);
 
 /**
  * @brief Selects the automatic level and ambience for an elapsed game time.

@@ -6,6 +6,7 @@
 #include <string>
 
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/RenderTexture.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Audio/Music.hpp>
@@ -48,9 +49,13 @@ private:
     void update_camera(float elapsed_seconds);
     /** @brief Draws four horizontally repeated layers at configured speeds. */
     void draw_parallax();
+    void draw_parallax_layers(sf::RenderTarget& target,
+                              const std::array<sf::Texture, 4>& textures);
     void draw_pause_menu();
     void update_adventure(float elapsed_seconds);
     void load_background(std::size_t level, std::size_t ambience);
+    void load_background_layers(std::array<sf::Texture, 4>& textures,
+                                std::size_t level, std::size_t ambience);
     void load_level_music(std::size_t level);
 
     ClientNetwork network_;
@@ -60,6 +65,8 @@ private:
     sf::Texture menu_texture_;
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
+    std::array<sf::Texture, 4> transition_background_textures_;
+    sf::RenderTexture transition_frame_;
     sf::Clock animation_clock_;
     sf::Clock frame_clock_;
     float camera_x_ = 0.f;
@@ -70,6 +77,9 @@ private:
     float adventure_elapsed_seconds_ = 0.f;
     std::size_t current_level_ = 0;
     std::size_t current_ambience_ = 0;
+    std::size_t transition_ambience_ = 1;
+    float transition_elapsed_seconds_ = 0.f;
+    bool ambience_transition_active_ = false;
     GameExitAction exit_action_ = GameExitAction::Quit;
     // Engine world mirroring the latest snapshot: one entity per player.
     World world_;

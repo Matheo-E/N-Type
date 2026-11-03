@@ -14,6 +14,7 @@
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
 #include "System.hpp"
+#include "UiClickSound.hpp"
 
 namespace ntype::client {
 
@@ -49,26 +50,46 @@ ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::stri
         throw std::runtime_error("Unable to load menu.png");
     load_background(0, 0);
     create_window();
+    if (!transition_frame_.create(config::kWidth, config::kHeight))
+        throw std::runtime_error("Unable to create the day/night transition buffer");
+    transition_frame_.setSmooth(true);
     load_level_music(0);
     frame_clock_.restart();
 }
 
 /**
- * @brief Loads the four layers for the automatically selected level and ambience.
+ * @brief Loads one set of four Parallax layers without changing adventure state.
+ * @param textures Destination textures to replace.
+ * @param level Zero-based adventure level.
+ * @param ambience Zero for day, one for night.
+ */
+void ClientApp::load_background_layers(std::array<sf::Texture, 4>& textures,
+                                       const std::size_t level,
+                                       const std::size_t ambience) {
+    const std::string asset_dir = NTYPE_ASSET_DIR;
+    const background::Selection selection{level, ambience};
+    for (std::size_t layer = 0; layer < textures.size(); ++layer) {
+        const auto path = background::layer_path(asset_dir, selection, layer);
+        if (!textures[layer].loadFromFile(path))
+            throw std::runtime_error("Unable to load parallax layer: " + path);
+        textures[layer].setSmooth(true);
+    }
+}
+
+/**
+ * @brief Loads the selected background and preloads its opposite ambience.
  * @param level Zero-based adventure level.
  * @param ambience Zero for day, one for night.
  */
 void ClientApp::load_background(const std::size_t level, const std::size_t ambience) {
-    const std::string asset_dir = NTYPE_ASSET_DIR;
-    const background::Selection selection{level, ambience};
-    for (std::size_t layer = 0; layer < background_textures_.size(); ++layer) {
-        const auto path = background::layer_path(asset_dir, selection, layer);
-        if (!background_textures_[layer].loadFromFile(path))
-            throw std::runtime_error("Unable to load parallax layer: " + path);
-        background_textures_[layer].setSmooth(true);
-    }
+    load_background_layers(background_textures_, level, ambience);
+    load_background_layers(transition_background_textures_, level,
+                           (ambience + 1U) % background::kAmbienceCount);
     current_level_ = level;
     current_ambience_ = ambience;
+    transition_ambience_ = (ambience + 1U) % background::kAmbienceCount;
+    transition_elapsed_seconds_ = 0.f;
+    ambience_transition_active_ = false;
 }
 
 /** @brief Replaces the looping soundtrack when the automatic level changes. */
@@ -83,17 +104,40 @@ void ClientApp::load_level_music(const std::size_t level) {
 }
 
 /**
- * @brief Advances the temporary timed adventure progression.
+ * @brief Advances the timed adventure and smoothly blends day with night.
+ *
+ * A change of level is kept separate and loaded directly so two different
+ * worlds are never mixed. An ambience-only change uses the preloaded textures
+ * for a six-second smoothstep crossfade.
+ *
  * @param elapsed_seconds Duration of the last rendered frame.
  */
 void ClientApp::update_adventure(const float elapsed_seconds) {
     adventure_elapsed_seconds_ += elapsed_seconds;
     const auto selection = background::selection_at_time(adventure_elapsed_seconds_);
-    if (selection.level == current_level_ && selection.ambience == current_ambience_) return;
 
-    const bool level_changed = selection.level != current_level_;
-    load_background(selection.level, selection.ambience);
-    if (level_changed) load_level_music(selection.level);
+    if (selection.level != current_level_) {
+        load_background(selection.level, selection.ambience);
+        load_level_music(selection.level);
+        return;
+    }
+
+    if (ambience_transition_active_) {
+        transition_elapsed_seconds_ += elapsed_seconds;
+        if (transition_elapsed_seconds_ < background::kDayNightFadeDurationSeconds) return;
+
+        for (std::size_t layer = 0; layer < background_textures_.size(); ++layer)
+            background_textures_[layer].swap(transition_background_textures_[layer]);
+        current_ambience_ = transition_ambience_;
+        transition_elapsed_seconds_ = 0.f;
+        ambience_transition_active_ = false;
+        return;
+    }
+
+    if (selection.ambience == current_ambience_) return;
+    transition_ambience_ = selection.ambience;
+    transition_elapsed_seconds_ = 0.f;
+    ambience_transition_active_ = true;
 }
 
 void ClientApp::create_window(const bool recreate) {
@@ -172,18 +216,23 @@ void ClientApp::poll_events() {
             event.mouseButton.button == sf::Mouse::Left) {
             const auto point = window_.mapPixelToCoords({event.mouseButton.x, event.mouseButton.y});
             if (kMenuButton.contains(point)) {
+                UiClickSound::instance().play();
                 pause_menu_open_ = !pause_menu_open_;
             } else if (pause_menu_open_ && kContinueButton.contains(point)) {
+                UiClickSound::instance().play();
                 pause_menu_open_ = false;
             } else if (pause_menu_open_ && kRestartButton.contains(point)) {
+                UiClickSound::instance().play();
                 exit_action_ = GameExitAction::Restart;
                 session_active_ = false;
                 return;
             } else if (pause_menu_open_ && kLobbyButton.contains(point)) {
+                UiClickSound::instance().play();
                 exit_action_ = GameExitAction::Lobby;
                 session_active_ = false;
                 return;
             } else if (pause_menu_open_ && kMusicButton.contains(point)) {
+                UiClickSound::instance().play();
                 music_enabled_ = !music_enabled_;
                 if (music_enabled_)
                     music_.play();
@@ -267,15 +316,19 @@ void ClientApp::update_camera(const float elapsed_seconds) {
 }
 
 /**
- * @brief Draws the four transparent layers with seamless horizontal repetition.
+ * @brief Draws one complete Parallax background into a render target.
  *
  * Each layer uses the same camera position multiplied by its configured factor.
  * Two copies are sufficient because every source image is wider than the viewport
  * after scaling; a third copy is drawn defensively for future narrower assets.
+ *
+ * @param target Window or off-screen transition buffer receiving the background.
+ * @param textures Four layers, ordered from distant scenery to ground.
  */
-void ClientApp::draw_parallax() {
-    for (std::size_t layer = 0; layer < background_textures_.size(); ++layer) {
-        const auto texture_size = background_textures_[layer].getSize();
+void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
+                                     const std::array<sf::Texture, 4>& textures) {
+    for (std::size_t layer = 0; layer < textures.size(); ++layer) {
+        const auto texture_size = textures[layer].getSize();
         const float scale = static_cast<float>(config::kHeight) /
                             static_cast<float>(texture_size.y);
         const float tile_width = static_cast<float>(texture_size.x) * scale;
@@ -283,12 +336,35 @@ void ClientApp::draw_parallax() {
         if (offset < 0.f) offset += tile_width;
 
         for (int tile = -1; tile <= 1; ++tile) {
-            sf::Sprite sprite(background_textures_[layer]);
+            sf::Sprite sprite(textures[layer]);
             sprite.setScale(scale, scale);
             sprite.setPosition(static_cast<float>(tile) * tile_width - offset, 0.f);
-            window_.draw(sprite);
+            target.draw(sprite);
         }
     }
+}
+
+/**
+ * @brief Draws the current background and the optional day/night crossfade.
+ *
+ * The incoming four-layer scene is first composited at full opacity in an
+ * off-screen texture. Blending that single finished image prevents transparent
+ * foreground layers from fading at different apparent speeds.
+ */
+void ClientApp::draw_parallax() {
+    draw_parallax_layers(window_, background_textures_);
+    if (!ambience_transition_active_) return;
+
+    transition_frame_.clear(sf::Color::Transparent);
+    draw_parallax_layers(transition_frame_, transition_background_textures_);
+    transition_frame_.display();
+
+    const float smooth_progress =
+        background::day_night_fade_progress(transition_elapsed_seconds_);
+    sf::Sprite transition_sprite(transition_frame_.getTexture());
+    transition_sprite.setColor(sf::Color(
+        255, 255, 255, static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f)));
+    window_.draw(transition_sprite);
 }
 
 /**
