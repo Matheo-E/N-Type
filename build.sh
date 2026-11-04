@@ -19,11 +19,32 @@ done
 for tool in git cmake ninja; do
     command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
+missing=()
+for tool in pkg-config autoconf autoreconf autoheader aclocal automake libtoolize; do
+    command -v "$tool" >/dev/null || missing+=("$tool")
+done
+# autoconf-archive provides macros, not an executable. ALSA needs these
+# even when all the Autotools commands are already installed.
+if command -v aclocal >/dev/null; then
+    IFS=: read -r -a aclocal_dirs <<< "${ACLOCAL_PATH:-}:$(aclocal --print-ac-dir)"
+    archive_found=0
+    for dir in "${aclocal_dirs[@]}"; do
+        if [[ -n "$dir" && -f "$dir/ax_check_compile_flag.m4" ]]; then
+            archive_found=1
+            break
+        fi
+    done
+    [[ $archive_found == 1 ]] || missing+=("autoconf-archive")
+fi
 if command -v pkg-config >/dev/null && ! pkg-config --exists x11 xrandr xcursor xi gl glu libudev; then
+    missing+=("X11/OpenGL/GLU/udev development headers")
+fi
+if (( ${#missing[@]} > 0 )); then
+    printf 'Missing build dependencies: %s\n' "${missing[*]}" >&2
     cat >&2 <<'PACKAGES'
-SFML needs the X11, OpenGL/GLU and udev development headers.
-Debian/Ubuntu: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libudev-dev autoconf automake libtool
-Fedora: sudo dnf install libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel mesa-libGLU-devel systemd-devel autoconf automake libtool
+SFML graphics and audio (ALSA) need these system dependencies.
+Debian/Ubuntu/Pop!_OS: sudo apt install pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libudev-dev autoconf autoconf-archive automake libtool
+Fedora: sudo dnf install pkgconf-pkg-config libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel mesa-libGLU-devel systemd-devel autoconf autoconf-archive automake libtool
 PACKAGES
     exit 1
 fi

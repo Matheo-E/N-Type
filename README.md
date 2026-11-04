@@ -7,8 +7,18 @@ The server computes all movement; clients send keys and display server positions
 
 ## Build
 
-Linux: git, CMake 3.25+, Ninja, a C++20 compiler and SFML's X11/OpenGL/GLU/udev headers.
+Linux: git, CMake 3.25+, Ninja, a C++20 compiler, pkg-config, Autotools
+(including autoconf-archive for ALSA), and SFML's X11/OpenGL/GLU/udev headers.
 Windows: git and Visual Studio 2022+ with the Desktop development with C++ workload.
+
+Install the Linux prerequisites on Debian/Ubuntu/Pop!_OS before building:
+
+```sh
+sudo apt install build-essential git cmake ninja-build pkg-config \
+    autoconf autoconf-archive automake libtool \
+    libx11-dev libxrandr-dev libxcursor-dev libxi-dev \
+    libgl1-mesa-dev libglu1-mesa-dev libudev-dev
+```
 
 ```sh
 ./build.sh       # Linux
