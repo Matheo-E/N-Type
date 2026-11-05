@@ -6,7 +6,7 @@
 #include <string>
 
 #include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/RenderTexture.hpp>
+#include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Audio/Music.hpp>
@@ -50,7 +50,8 @@ private:
     /** @brief Draws four horizontally repeated layers at configured speeds. */
     void draw_parallax();
     void draw_parallax_layers(sf::RenderTarget& target,
-                              const std::array<sf::Texture, 4>& textures);
+                              const std::array<sf::Texture, 4>& textures,
+                              sf::Uint8 opacity = 255);
     void draw_pause_menu();
     void update_adventure(float elapsed_seconds);
     void load_background(std::size_t level, std::size_t ambience);
@@ -62,11 +63,10 @@ private:
     sf::RenderWindow& window_;
     bool& fullscreen_;
     sf::Texture player_texture_;
-    sf::Texture menu_texture_;
+    sf::Font ui_font_;
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
     std::array<sf::Texture, 4> transition_background_textures_;
-    sf::RenderTexture transition_frame_;
     sf::Clock animation_clock_;
     sf::Clock frame_clock_;
     float camera_x_ = 0.f;

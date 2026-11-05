@@ -25,13 +25,6 @@ inline constexpr std::array<const char*, kAmbienceCount> kAmbienceFolders{"day",
 inline constexpr std::array<const char*, kLayerCount> kLayerFiles{
     "layer_01_far.png", "layer_02_middle.png", "layer_03_near.png",
     "layer_04_ground.png"};
-/** Preview filenames preserve the actual format available for each ambience. */
-inline constexpr std::array<std::array<const char*, kAmbienceCount>, kLevelCount>
-    kPreviewFiles{{
-        {"preview.png", "preview.png"},
-        {"preview.png", "preview.png"},
-        {"preview.jpg", "preview.png"},
-    }};
 
 /**
  * @brief Base speed of the automatic background scroll, in pixels per second.
@@ -106,18 +99,6 @@ inline std::string layer_path(const std::string& asset_root, const Selection sel
                               const std::size_t layer) {
     return asset_root + "/backgrounds/" + kLevelFolders[selection.level] + "/" +
            kAmbienceFolders[selection.ambience] + "/" + kLayerFiles[layer];
-}
-
-/**
- * @brief Builds the preview path for a level and ambience.
- * @param asset_root Root of the organized assets directory.
- * @param selection Selected level and day/night ambience.
- * @return Absolute path to the existing PNG or JPEG preview.
- */
-inline std::string preview_path(const std::string& asset_root, const Selection selection) {
-    return asset_root + "/backgrounds/" + kLevelFolders[selection.level] + "/" +
-           kAmbienceFolders[selection.ambience] + "/" +
-           kPreviewFiles[selection.level][selection.ambience];
 }
 
 /**

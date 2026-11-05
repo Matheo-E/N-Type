@@ -4,6 +4,7 @@
 #include "ClientApp.hpp"
 #include "Launcher.hpp"
 #include "Options.hpp"
+#include "UiClickSound.hpp"
 
 int main(int argc, char** argv) {
     try {
@@ -26,6 +27,8 @@ int main(int argc, char** argv) {
                                          settings->port, settings->music_enabled);
                 action = app.run();
                 settings->music_enabled = app.music_enabled();
+                settings->click_sound_enabled =
+                    ntype::client::UiClickSound::instance().enabled();
             } // Stops and destroys the level music before changing screens.
             if (action == ntype::client::GameExitAction::Quit) break;
             if (action == ntype::client::GameExitAction::Lobby)

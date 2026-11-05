@@ -4,6 +4,7 @@
 #include <array>
 #include <asio.hpp>
 #include <charconv>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <thread>
@@ -23,6 +24,20 @@ struct Field {
     std::string value;
     sf::FloatRect bounds;
 };
+
+namespace style {
+const sf::Color panel{13, 39, 70, 230};
+const sf::Color field{18, 49, 82, 245};
+const sf::Color border{74, 130, 176};
+const sf::Color primary{31, 111, 171};
+const sf::Color primary_hover{42, 132, 198};
+const sf::Color success{42, 132, 104};
+const sf::Color success_hover{52, 151, 119};
+const sf::Color secondary{76, 79, 146};
+const sf::Color secondary_hover{91, 95, 167};
+const sf::Color disabled{61, 72, 86};
+const sf::Color muted_text{184, 202, 220};
+} // namespace style
 
 std::optional<sf::Font> load_font() {
     const std::array<const char*, 5> paths{
@@ -49,21 +64,46 @@ void draw_text(sf::RenderWindow& window, const sf::Font& font, const std::string
     window.draw(text);
 }
 
-void draw_map_preview(sf::RenderWindow& window, const sf::Texture& texture,
-                      const sf::FloatRect& bounds, const bool selected = false) {
-    const auto size = texture.getSize();
-    sf::Sprite preview(texture);
-    preview.setPosition(bounds.left, bounds.top);
-    preview.setScale(bounds.width / static_cast<float>(size.x),
-                     bounds.height / static_cast<float>(size.y));
-    window.draw(preview);
+/** @brief Draws a lightweight rounded UI surface without sprite assets. */
+void draw_rounded_rect(sf::RenderWindow& window, const sf::FloatRect& bounds,
+                       const float radius, const sf::Color fill,
+                       const sf::Color outline = sf::Color::Transparent,
+                       const float outline_thickness = 0.f) {
+    constexpr int corner_steps = 5;
+    constexpr float pi = 3.14159265358979323846f;
+    sf::ConvexShape shape(static_cast<std::size_t>(corner_steps * 4));
+    std::size_t index = 0;
+    for (int corner = 0; corner < 4; ++corner) {
+        const float center_x = bounds.left + (corner == 0 || corner == 3 ? radius
+                                                                         : bounds.width - radius);
+        const float center_y = bounds.top + (corner < 2 ? radius : bounds.height - radius);
+        const float start = static_cast<float>(corner) * pi / 2.f + pi;
+        for (int step = 0; step < corner_steps; ++step) {
+            const float angle = start + static_cast<float>(step) * (pi / 2.f) /
+                                            static_cast<float>(corner_steps - 1);
+            shape.setPoint(index++, {center_x + std::cos(angle) * radius,
+                                     center_y + std::sin(angle) * radius});
+        }
+    }
+    shape.setFillColor(fill);
+    shape.setOutlineColor(outline);
+    shape.setOutlineThickness(outline_thickness);
+    window.draw(shape);
+}
 
-    sf::RectangleShape border({bounds.width, bounds.height});
-    border.setPosition(bounds.left, bounds.top);
-    border.setFillColor(sf::Color::Transparent);
-    border.setOutlineThickness(selected ? 4.f : 1.f);
-    border.setOutlineColor(selected ? sf::Color::White : sf::Color(110, 120, 140));
-    window.draw(border);
+/** @brief Draws a centered text button with normal, hover, pressed and disabled states. */
+void draw_button(sf::RenderWindow& window, const sf::Font& font, const sf::FloatRect& bounds,
+                 const std::string& label, const sf::Vector2f& mouse, const bool pressed,
+                 const bool enabled, const sf::Color normal, const sf::Color hover) {
+    sf::Color fill = enabled ? normal : style::disabled;
+    if (enabled && bounds.contains(mouse)) fill = pressed ? normal * sf::Color(210, 210, 210) : hover;
+    draw_rounded_rect(window, bounds, 8.f, fill, style::border, 1.f);
+    sf::Text text(label, font, 18);
+    text.setFillColor(enabled ? sf::Color::White : sf::Color(160, 170, 180));
+    const auto text_bounds = text.getLocalBounds();
+    text.setPosition(bounds.left + (bounds.width - text_bounds.width) / 2.f - text_bounds.left,
+                     bounds.top + (bounds.height - text_bounds.height) / 2.f - text_bounds.top - 1.f);
+    window.draw(text);
 }
 
 /**
@@ -115,24 +155,22 @@ void draw_texture_cover(sf::RenderWindow& window, const sf::Texture& texture,
     draw_texture_region(window, texture, source, destination);
 }
 
-void update_letterbox_view(sf::RenderWindow& window) {
-    constexpr float logical_width = 560.f;
+void update_launcher_view(sf::RenderWindow& window) {
     constexpr float logical_height = 410.f;
     const auto size = window.getSize();
     if (size.x == 0 || size.y == 0) return;
-    const float window_ratio = static_cast<float>(size.x) / static_cast<float>(size.y);
-    const float logical_ratio = logical_width / logical_height;
-    sf::FloatRect viewport(0.f, 0.f, 1.f, 1.f);
-    if (window_ratio > logical_ratio) {
-        viewport.width = logical_ratio / window_ratio;
-        viewport.left = (1.f - viewport.width) / 2.f;
-    } else {
-        viewport.height = window_ratio / logical_ratio;
-        viewport.top = (1.f - viewport.height) / 2.f;
-    }
-    sf::View view(sf::FloatRect(0.f, 0.f, logical_width, logical_height));
-    view.setViewport(viewport);
+    const float logical_width = logical_height * static_cast<float>(size.x) /
+                                static_cast<float>(size.y);
+    sf::View view(sf::FloatRect((560.f - logical_width) / 2.f, 0.f, logical_width,
+                               logical_height));
     window.setView(view);
+}
+
+sf::FloatRect current_view_bounds(const sf::RenderWindow& window) {
+    const auto& view = window.getView();
+    const auto size = view.getSize();
+    const auto center = view.getCenter();
+    return {center.x - size.x / 2.f, center.y - size.y / 2.f, size.x, size.y};
 }
 
 bool server_is_reachable(const std::string& host, const std::uint16_t port, std::string& error) {
@@ -204,25 +242,18 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
     auto font = load_font();
     if (!font) return std::nullopt;
     auto& click_sound = UiClickSound::instance();
-    sf::Texture adventure_preview;
-    if (!adventure_preview.loadFromFile(
-            background::preview_path(NTYPE_ASSET_DIR, {0, 0})))
-        return std::nullopt;
-    adventure_preview.setSmooth(true);
-    sf::Texture login_sheet;
-    sf::Texture login_background;
+    click_sound.set_enabled(defaults.click_sound_enabled);
+    bool music_enabled = defaults.music_enabled;
+    sf::Texture lobby_background;
     const std::string asset_directory = NTYPE_ASSET_DIR;
-    if (!login_sheet.loadFromFile(asset_directory + "/ui/login_sheet.png") ||
-        !login_background.loadFromFile(asset_directory + "/ui/launcher_background.png"))
+    if (!lobby_background.loadFromFile(asset_directory + "/sprites/lobby/bg_gradient.png"))
         return std::nullopt;
-    login_sheet.setSmooth(true);
-    login_background.setSmooth(true);
+    lobby_background.setSmooth(true);
     sf::Music lobby_music;
-    if (defaults.music_enabled &&
-        lobby_music.openFromFile(std::string(NTYPE_ASSET_DIR) + "/audio/music/lobby.mp3")) {
+    if (lobby_music.openFromFile(std::string(NTYPE_ASSET_DIR) + "/audio/music/lobby.mp3")) {
         lobby_music.setLoop(true);
         lobby_music.setVolume(40.f);
-        lobby_music.play();
+        if (music_enabled) lobby_music.play();
     }
 
     if (!window.isOpen()) {
@@ -233,7 +264,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
         if (!fullscreen) window.setSize({700, 520});
     }
     window.setFramerateLimit(60);
-    update_letterbox_view(window);
+    update_launcher_view(window);
     std::array<Field, 3> connection_fields{{
         {"Name", defaults.name, {194.f, 112.f, 346.f, 67.f}},
         {"Host", defaults.host, {194.f, 181.f, 346.f, 67.f}},
@@ -249,13 +280,21 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
     unsigned lobby_size = 4;
     unsigned current_players = 1;
     bool lobby_created = false;
+    bool settings_open = false;
     std::size_t active = 0;
     std::string error;
     const sf::FloatRect button{150.f, 320.f, 350.f, 52.f};
-    const sf::FloatRect connection_button{162.f, 328.f, 236.f, 46.f};
+    const sf::FloatRect connection_button{194.f, 328.f, 346.f, 46.f};
     const sf::FloatRect join_button{45.f, 250.f, 205.f, 52.f};
     const sf::FloatRect create_button{310.f, 150.f, 205.f, 46.f};
-    const sf::FloatRect solo_button{310.f, 315.f, 205.f, 48.f};
+    const sf::FloatRect solo_button{310.f, 230.f, 205.f, 48.f};
+    const sf::FloatRect decrease_players_button{170.f, 205.f, 70.f, 40.f};
+    const sf::FloatRect increase_players_button{430.f, 205.f, 70.f, 40.f};
+    const sf::FloatRect make_lobby_button{170.f, 280.f, 330.f, 48.f};
+    const sf::FloatRect back_button{18.f, 12.f, 46.f, 32.f};
+    const sf::FloatRect settings_button{500.f, 12.f, 44.f, 34.f};
+    const sf::FloatRect music_toggle{170.f, 145.f, 220.f, 48.f};
+    const sf::FloatRect click_toggle{170.f, 210.f, 220.f, 48.f};
 
     const auto connect = [&]() -> bool {
         unsigned parsed = 0;
@@ -291,13 +330,39 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                                   sf::Style::Default);
                 }
                 window.setFramerateLimit(60);
-                update_letterbox_view(window);
+                update_launcher_view(window);
             }
-            if (event.type == sf::Event::Resized) update_letterbox_view(window);
+            if (event.type == sf::Event::Resized) update_launcher_view(window);
             if (event.type == sf::Event::MouseButtonPressed &&
                 event.mouseButton.button == sf::Mouse::Left) {
                 const sf::Vector2f point =
                     window.mapPixelToCoords({event.mouseButton.x, event.mouseButton.y});
+                if (settings_button.contains(point)) {
+                    click_sound.play();
+                    settings_open = !settings_open;
+                    continue;
+                }
+                if (settings_open && music_toggle.contains(point)) {
+                    click_sound.play();
+                    music_enabled = !music_enabled;
+                    if (music_enabled)
+                        lobby_music.play();
+                    else
+                        lobby_music.pause();
+                    continue;
+                }
+                if (settings_open && click_toggle.contains(point)) {
+                    click_sound.play();
+                    click_sound.set_enabled(!click_sound.enabled());
+                    continue;
+                }
+                if (settings_open) continue;
+                if (page != Page::Connection && back_button.contains(point)) {
+                    click_sound.play();
+                    page = page == Page::Browser ? Page::Connection : Page::Browser;
+                    error.clear();
+                    continue;
+                }
                 if (page == Page::Connection) {
                     for (std::size_t i = 0; i < connection_fields.size(); ++i)
                         if (connection_fields[i].bounds.contains(point)) active = i;
@@ -326,22 +391,20 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                         click_sound.play();
                         if (server_is_reachable(host, selected_port, error)) {
                             return ConnectionSettings{player_name, host, selected_port,
-                                                      defaults.music_enabled};
+                                                      music_enabled, click_sound.enabled()};
                         }
                     }
                 } else if (page == Page::Create) {
                     if (lobby_fields[0].bounds.contains(point)) active = 0;
-                    if (sf::FloatRect(170.f, 325.f, 70.f, 30.f).contains(point) &&
-                        lobby_size > 2) {
+                    if (decrease_players_button.contains(point) && lobby_size > 2) {
                         click_sound.play();
                         --lobby_size;
                     }
-                    if (sf::FloatRect(430.f, 325.f, 70.f, 30.f).contains(point) &&
-                        lobby_size < 4) {
+                    if (increase_players_button.contains(point) && lobby_size < 4) {
                         click_sound.play();
                         ++lobby_size;
                     }
-                    if (sf::FloatRect(170.f, 350.f, 330.f, 45.f).contains(point)) {
+                    if (make_lobby_button.contains(point)) {
                         click_sound.play();
                         if (lobby_fields[0].value.empty()) error = "Lobby name must not be empty.";
                         else {
@@ -357,7 +420,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                     click_sound.play();
                     if (server_is_reachable(host, selected_port, error)) {
                         return ConnectionSettings{player_name, host, selected_port,
-                                                  defaults.music_enabled};
+                                                  music_enabled, click_sound.enabled()};
                     }
                 }
             }
@@ -382,95 +445,129 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
         }
 
         window.clear(sf::Color(20, 24, 34));
-        if (page != Page::Connection)
-            draw_text(window, *font, "F11: fullscreen", 414.f, 10.f, 13,
-                      sf::Color(155, 165, 185));
+        const sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        const bool mouse_pressed = sf::Mouse::isButtonPressed(sf::Mouse::Left);
+        const sf::FloatRect view_bounds = current_view_bounds(window);
         if (page == Page::Connection) {
-            draw_texture_cover(window, login_background, {0.f, 0.f, 560.f, 410.f});
-            sf::RectangleShape shade({560.f, 410.f});
-            shade.setFillColor(sf::Color(8, 37, 80, 28));
+            draw_texture_cover(window, lobby_background, view_bounds);
+            sf::RectangleShape shade({view_bounds.width, view_bounds.height});
+            shade.setPosition(view_bounds.left, view_bounds.top);
+            shade.setFillColor(sf::Color(8, 26, 44));
             window.draw(shade);
-
-            draw_texture_region(window, login_sheet, {40, 130, 1368, 277},
-                                {30.f, 7.f, 500.f, 101.f});
-            const std::array<sf::IntRect, 3> login_rows{{
-                {28, 452, 1388, 180},
-                {27, 645, 1390, 185},
-                {26, 835, 1391, 184},
-            }};
+            draw_rounded_rect(window, {80.f, 35.f, 480.f, 355.f}, 16.f,
+                              sf::Color(8, 37, 67, 220), sf::Color(99, 155, 198), 1.f);
+            draw_text(window, *font, "Connexion", 213.f, 58.f, 30);
             for (std::size_t i = 0; i < connection_fields.size(); ++i) {
                 const auto& field = connection_fields[i];
-                draw_texture_region(window, login_sheet, login_rows[i],
-                                    {20.f, field.bounds.top, 520.f, field.bounds.height});
+                draw_text(window, *font, field.label, 120.f, field.bounds.top + 20.f, 17,
+                          style::muted_text);
+                draw_rounded_rect(window, field.bounds, 8.f, style::field,
+                                  i == active ? sf::Color(103, 177, 224) : style::border,
+                                  i == active ? 2.f : 1.f);
                 if (i == active) {
-                    sf::RectangleShape cursor({4.f, 27.f});
-                    cursor.setPosition(field.bounds.left + 17.f, field.bounds.top + 20.f);
-                    cursor.setFillColor(sf::Color(255, 188, 35));
+                    sf::RectangleShape cursor({2.f, 23.f});
+                    cursor.setPosition(field.bounds.left + 15.f, field.bounds.top + 21.f);
+                    cursor.setFillColor(sf::Color(146, 206, 241));
                     window.draw(cursor);
                 }
-                draw_text(window, *font, field.value, field.bounds.left + 29.f,
-                          field.bounds.top + 19.f, 19, sf::Color(7, 37, 89));
+                draw_text(window, *font, field.value, field.bounds.left + 24.f,
+                          field.bounds.top + 19.f, 19);
             }
-            draw_texture_region(window, login_sheet, {493, 452, 923, 180}, connection_button);
-            draw_text(window, *font, "SE CONNECTER", 218.f, 339.f, 16,
-                      sf::Color(7, 37, 89));
+            draw_button(window, *font, connection_button, "Se connecter", mouse, mouse_pressed,
+                        true, style::primary, style::primary_hover);
             if (error.empty())
                 draw_text(window, *font, "F11 : plein ecran", 448.f, 392.f, 10,
-                          sf::Color(7, 37, 89));
+                          style::muted_text);
         } else if (page == Page::Browser) {
+            draw_texture_cover(window, lobby_background, view_bounds);
             draw_text(window, *font, "Lobbies", 228.f, 38.f, 30);
-            sf::RectangleShape divider({2.f, 275.f}); divider.setPosition(279.f, 90.f);
-            divider.setFillColor(sf::Color(75, 83, 100)); window.draw(divider);
+            sf::RectangleShape divider({1.f, 260.f});
+            divider.setPosition(279.f, 95.f);
+            divider.setFillColor(style::border);
+            window.draw(divider);
             draw_text(window, *font, "Join a lobby", 65.f, 100.f, 22);
             draw_text(window, *font, "Create a lobby", 335.f, 100.f, 22);
-            sf::RectangleShape lobby({205.f, 82.f}); lobby.setPosition(45.f, 150.f);
-            lobby.setFillColor(sf::Color(36, 43, 58)); window.draw(lobby);
-            draw_text(window, *font, lobby_created ? lobby_name : "Arcade lobby", 62.f, 162.f, 19);
+            const sf::FloatRect lobby_bounds{45.f, 150.f, 205.f, 82.f};
+            draw_rounded_rect(window, lobby_bounds, 9.f,
+                              lobby_bounds.contains(mouse) ? sf::Color(28, 75, 111)
+                                                           : style::panel,
+                              sf::Color(78, 151, 198), 1.5f);
+            draw_text(window, *font, lobby_created ? lobby_name : "Arcade lobby", 62.f, 161.f, 18);
             const std::string lobby_details = lobby_created
                 ? "1 / " + std::to_string(lobby_size) + "  -  Adventure"
                 : "3 / 4  -  Adventure";
-            draw_text(window, *font, lobby_details, 62.f, 194.f, 14, sf::Color(170, 180, 200));
-            sf::RectangleShape join({join_button.width, join_button.height}); join.setPosition(join_button.left, join_button.top);
-            join.setFillColor(sf::Color(55, 115, 180)); window.draw(join);
-            draw_text(window, *font, "Join selected", 85.f, 263.f, 19);
-            sf::RectangleShape create({create_button.width, create_button.height}); create.setPosition(create_button.left, create_button.top);
-            create.setFillColor(sf::Color(48, 145, 95)); window.draw(create);
-            draw_text(window, *font, "Create lobby", 350.f, 160.f, 19);
-            draw_text(window, *font, "Automatic adventure", 320.f, 205.f, 16);
-            draw_map_preview(window, adventure_preview, {310.f, 230.f, 205.f, 75.f});
-            draw_text(window, *font, "Levels 1 > 2 > 3", 350.f, 256.f, 14);
-            sf::RectangleShape solo({solo_button.width, solo_button.height});
-            solo.setPosition(solo_button.left, solo_button.top); solo.setFillColor(sf::Color(125, 80, 180));
-            window.draw(solo); draw_text(window, *font, "Play solo", 370.f, 326.f, 20);
+            draw_text(window, *font, lobby_details, 62.f, 193.f, 13, style::muted_text);
+            draw_button(window, *font, join_button, "Join selected", mouse, mouse_pressed, true,
+                        style::primary, style::primary_hover);
+            draw_button(window, *font, create_button, "Create lobby", mouse, mouse_pressed, true,
+                        style::success, style::success_hover);
+            draw_button(window, *font, solo_button, "Play solo", mouse, mouse_pressed, true,
+                        style::secondary, style::secondary_hover);
         } else if (page == Page::Create) {
+            draw_texture_cover(window, lobby_background, view_bounds);
             draw_text(window, *font, "Create a lobby", 178.f, 35.f, 28);
-            draw_text(window, *font, "Backspace: back", 25.f, 12.f, 13, sf::Color(155, 165, 185));
             draw_text(window, *font, "Lobby name", 45.f, 117.f, 18);
-            sf::RectangleShape name_box({330.f, 48.f}); name_box.setPosition(170.f, 105.f);
-            name_box.setFillColor(sf::Color(36, 43, 58)); name_box.setOutlineThickness(2.f);
-            name_box.setOutlineColor(sf::Color(80, 180, 255)); window.draw(name_box);
+            draw_rounded_rect(window, lobby_fields[0].bounds, 8.f, style::field,
+                              sf::Color(103, 177, 224), 1.5f);
             draw_text(window, *font, lobby_fields[0].value, 182.f, 115.f);
-            draw_text(window, *font, "Automatic adventure: levels 1 > 2 > 3", 90.f, 170.f, 17);
-            draw_map_preview(window, adventure_preview, {170.f, 200.f, 330.f, 120.f});
-            draw_text(window, *font, "Players", 45.f, 334.f, 18);
-            draw_text(window, *font, "-", 195.f, 329.f, 26); draw_text(window, *font, std::to_string(lobby_size), 329.f, 331.f, 22);
-            draw_text(window, *font, "+", 452.f, 329.f, 26);
-            sf::RectangleShape make({330.f, 45.f}); make.setPosition(170.f, 350.f); make.setFillColor(sf::Color(48, 145, 95)); window.draw(make);
-            draw_text(window, *font, "Create lobby", 270.f, 360.f, 19);
+            draw_text(window, *font, "Players", 45.f, 214.f, 18);
+            draw_button(window, *font, decrease_players_button, "-", mouse, mouse_pressed,
+                        lobby_size > 2, style::primary, style::primary_hover);
+            draw_text(window, *font, std::to_string(lobby_size), 327.f, 211.f, 24);
+            draw_button(window, *font, increase_players_button, "+", mouse, mouse_pressed,
+                        lobby_size < 4, style::primary, style::primary_hover);
+            draw_button(window, *font, make_lobby_button, "Create lobby", mouse, mouse_pressed,
+                        !lobby_fields[0].value.empty(), style::success, style::success_hover);
         } else {
+            draw_texture_cover(window, lobby_background, view_bounds);
             draw_text(window, *font, "Waiting room", 190.f, 45.f, 30);
             draw_text(window, *font, lobby_name, 210.f, 105.f, 24);
             draw_text(window, *font, "Players: " + std::to_string(current_players) + " / " +
                       std::to_string(lobby_size), 210.f, 155.f, 18);
-            draw_map_preview(window, adventure_preview, {190.f, 195.f, 180.f, 90.f});
-            draw_text(window, *font, "Starts at level 1", 218.f, 225.f, 16);
-            sf::RectangleShape start({button.width, button.height}); start.setPosition(button.left, button.top);
             const bool full = current_players == lobby_size;
-            start.setFillColor(full ? sf::Color(48, 145, 95) : sf::Color(75, 80, 90)); window.draw(start);
-            draw_text(window, *font, full ? "Enter game" : "Waiting for players...",
-                      full ? 265.f : 218.f, 331.f, full ? 21U : 18U,
-                      full ? sf::Color::White : sf::Color(175, 180, 190));
-            draw_text(window, *font, "Backspace: back", 25.f, 12.f, 13, sf::Color(155, 165, 185));
+            draw_button(window, *font, button,
+                        full ? "Enter game" : "Waiting for players...", mouse, mouse_pressed,
+                        full, style::success, style::success_hover);
+        }
+        if (page != Page::Connection)
+            draw_button(window, *font, back_button, "<", mouse, mouse_pressed, true,
+                        style::primary, style::primary_hover);
+        draw_rounded_rect(window, settings_button, 7.f,
+                          settings_button.contains(mouse) ? style::primary_hover : style::primary,
+                          style::border, 1.f);
+        for (int line = 0; line < 3; ++line) {
+            sf::RectangleShape bar({20.f, 2.f});
+            bar.setPosition(settings_button.left + 12.f,
+                            settings_button.top + 10.f + static_cast<float>(line) * 7.f);
+            bar.setFillColor(sf::Color::White);
+            window.draw(bar);
+        }
+        if (settings_open) {
+            sf::RectangleShape overlay({view_bounds.width, view_bounds.height});
+            overlay.setPosition(view_bounds.left, view_bounds.top);
+            overlay.setFillColor(sf::Color(3, 11, 20, 175));
+            window.draw(overlay);
+            draw_rounded_rect(window, {130.f, 90.f, 300.f, 230.f}, 12.f,
+                              sf::Color(8, 31, 53, 250), style::border, 1.5f);
+            draw_text(window, *font, "Reglages", 224.f, 105.f, 26);
+            draw_button(window, *font, music_toggle, "Musique", mouse, mouse_pressed, true,
+                        music_enabled ? style::success : style::disabled,
+                        music_enabled ? style::success_hover : sf::Color(76, 88, 103));
+            draw_button(window, *font, click_toggle, "Son", mouse, mouse_pressed, true,
+                        click_sound.enabled() ? style::success : style::disabled,
+                        click_sound.enabled() ? style::success_hover : sf::Color(76, 88, 103));
+            draw_text(window, *font, "F11 : plein ecran", 215.f, 280.f, 14,
+                      style::muted_text);
+            // Keep the hamburger above the modal so it also closes the menu.
+            draw_rounded_rect(window, settings_button, 7.f, style::primary_hover,
+                              style::border, 1.f);
+            for (int line = 0; line < 3; ++line) {
+                sf::RectangleShape bar({20.f, 2.f});
+                bar.setPosition(settings_button.left + 12.f,
+                                settings_button.top + 10.f + static_cast<float>(line) * 7.f);
+                bar.setFillColor(sf::Color::White);
+                window.draw(bar);
+            }
         }
         if (!error.empty()) {
             if (page == Page::Connection) {

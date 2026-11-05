@@ -13,6 +13,7 @@ struct ConnectionSettings {
     std::string host;
     std::uint16_t port;
     bool music_enabled = true;
+    bool click_sound_enabled = true;
 };
 
 /**

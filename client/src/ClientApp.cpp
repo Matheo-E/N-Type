@@ -8,6 +8,7 @@
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
+#include <SFML/OpenGL.hpp>
 
 #include "Factory.hpp"
 #include "BackgroundConfig.hpp"
@@ -29,8 +30,24 @@ constexpr float kCameraResponsiveness = 10.f;
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
 const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
 const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
-const sf::FloatRect kLobbyButton{350.f, 450.f, 280.f, 100.f};
-const sf::FloatRect kMusicButton{650.f, 450.f, 280.f, 100.f};
+const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
+const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
+const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
+
+bool load_ui_font(sf::Font& font) {
+    const std::array<const char*, 4> paths{
+#ifdef _WIN32
+        "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
+#else
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+#endif
+        "/usr/local/share/fonts/DejaVuSans.ttf", "DejaVuSans.ttf",
+    };
+    return std::any_of(paths.begin(), paths.end(), [&](const char* path) {
+        return font.loadFromFile(path);
+    });
+}
 
 constexpr std::uint8_t bit(const protocol::InputType key) {
     return static_cast<std::uint8_t>(key);
@@ -45,16 +62,11 @@ ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::stri
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
     const std::string player_path = asset_dir + "/sprites/player/tooth.png";
-    const std::string menu_path = asset_dir + "/ui/pause_menu_sheet.png";
     if (!player_texture_.loadFromFile(player_path))
         throw std::runtime_error("Unable to load player sprite: " + player_path);
-    if (!menu_texture_.loadFromFile(menu_path))
-        throw std::runtime_error("Unable to load pause menu sprite sheet: " + menu_path);
+    if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
     load_background(0, 0);
     create_window();
-    if (!transition_frame_.create(config::kWidth, config::kHeight))
-        throw std::runtime_error("Unable to create the day/night transition buffer");
-    transition_frame_.setSmooth(true);
     load_level_music(0);
     frame_clock_.restart();
 }
@@ -163,19 +175,13 @@ void ClientApp::update_view() {
     const auto size = window_.getSize();
     if (size.x == 0 || size.y == 0) return;
     const float window_ratio = static_cast<float>(size.x) / static_cast<float>(size.y);
-    const float game_ratio = static_cast<float>(config::kWidth) / static_cast<float>(config::kHeight);
-    sf::FloatRect viewport(0.f, 0.f, 1.f, 1.f);
-    if (window_ratio > game_ratio) {
-        viewport.width = game_ratio / window_ratio;
-        viewport.left = (1.f - viewport.width) / 2.f;
-    } else {
-        viewport.height = window_ratio / game_ratio;
-        viewport.top = (1.f - viewport.height) / 2.f;
-    }
-    sf::View view(sf::FloatRect(0.f, 0.f, static_cast<float>(config::kWidth),
-                               static_cast<float>(config::kHeight)));
-    view.setViewport(viewport);
+    const float visible_width = static_cast<float>(config::kHeight) * window_ratio;
+    sf::View view(sf::FloatRect((static_cast<float>(config::kWidth) - visible_width) / 2.f,
+                               0.f, visible_width, static_cast<float>(config::kHeight)));
+    view.setViewport({0.f, 0.f, 1.f, 1.f});
     window_.setView(view);
+    window_.setActive(true);
+    glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
 }
 
 GameExitAction ClientApp::run() {
@@ -240,6 +246,9 @@ void ClientApp::poll_events() {
                     music_.play();
                 else
                     music_.pause();
+            } else if (pause_menu_open_ && kClickSoundButton.contains(point)) {
+                auto& click_sound = UiClickSound::instance();
+                click_sound.set_enabled(!click_sound.enabled());
             }
         }
     }
@@ -330,7 +339,8 @@ void ClientApp::update_camera(const float elapsed_seconds) {
  * @param textures Four layers, ordered from distant scenery to ground.
  */
 void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
-                                     const std::array<sf::Texture, 4>& textures) {
+                                     const std::array<sf::Texture, 4>& textures,
+                                     const sf::Uint8 opacity) {
     for (std::size_t layer = 0; layer < textures.size(); ++layer) {
         const auto texture_size = textures[layer].getSize();
         const float scale = static_cast<float>(config::kHeight) /
@@ -345,6 +355,7 @@ void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
 
         for (int tile = -1; tile <= 1; ++tile) {
             sf::Sprite sprite(textures[layer]);
+            sprite.setColor(sf::Color(255, 255, 255, opacity));
             sprite.setScale(scale, scale);
             sprite.setPosition(static_cast<float>(tile) * tile_width - offset, 0.f);
             target.draw(sprite);
@@ -355,44 +366,62 @@ void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
 /**
  * @brief Draws the current background and the optional day/night crossfade.
  *
- * The incoming four-layer scene is first composited at full opacity in an
- * off-screen texture. Blending that single finished image prevents transparent
- * foreground layers from fading at different apparent speeds.
+ * The incoming layers are blended directly into the window. Keeping rendering
+ * on one target prevents an off-screen OpenGL context from leaking its 1280x720
+ * viewport into a larger fullscreen or maximized window.
  */
 void ClientApp::draw_parallax() {
     draw_parallax_layers(window_, background_textures_);
     if (!ambience_transition_active_) return;
 
-    transition_frame_.clear(sf::Color::Transparent);
-    draw_parallax_layers(transition_frame_, transition_background_textures_);
-    transition_frame_.display();
-
     const float smooth_progress =
         background::day_night_fade_progress(transition_elapsed_seconds_);
-    sf::Sprite transition_sprite(transition_frame_.getTexture());
-    transition_sprite.setColor(sf::Color(
-        255, 255, 255, static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f)));
-    window_.draw(transition_sprite);
+    draw_parallax_layers(
+        window_, transition_background_textures_,
+        static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f));
 }
 
-/**
- * @brief Draws the pause controls by cropping the pause-menu sprite sheet.
- *
- * Pausing suppresses local input but networking continues, which keeps a
- * multiplayer client connected and allows other players to keep moving.
- */
+/** @brief Draws the pause controls from SFML primitives and live text. */
 void ClientApp::draw_pause_menu() {
-    const auto draw_asset = [&](const sf::IntRect source, const sf::FloatRect target) {
-        sf::Sprite sprite(menu_texture_);
-        sprite.setTextureRect(source);
-        sprite.setPosition(target.left, target.top);
-        sprite.setScale(target.width / static_cast<float>(source.width),
-                        target.height / static_cast<float>(source.height));
-        window_.draw(sprite);
+    const sf::Vector2f mouse = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+    const bool pressed = sf::Mouse::isButtonPressed(sf::Mouse::Left);
+    const auto draw_button = [&](const sf::FloatRect& bounds, const std::string& label,
+                                 const bool enabled = true, const bool toggle = false,
+                                 const bool active = true) {
+        sf::Color fill = enabled ? sf::Color(27, 78, 119) : sf::Color(55, 64, 74);
+        if (toggle) fill = active ? sf::Color(42, 132, 104) : sf::Color(55, 64, 74);
+        if (enabled && bounds.contains(mouse))
+            fill = pressed ? sf::Color(25, 68, 103)
+                           : (toggle && active ? sf::Color(52, 151, 119)
+                                               : sf::Color(76, 88, 103));
+        sf::RectangleShape button({bounds.width, bounds.height});
+        button.setPosition(bounds.left, bounds.top);
+        button.setFillColor(fill);
+        button.setOutlineThickness(2.f);
+        button.setOutlineColor(sf::Color(91, 145, 183));
+        window_.draw(button);
+        sf::Text text(label, ui_font_, bounds.height < 70.f ? 17U : 30U);
+        text.setFillColor(enabled ? sf::Color::White : sf::Color(155, 165, 175));
+        const auto text_bounds = text.getLocalBounds();
+        text.setPosition(bounds.left + (bounds.width - text_bounds.width) / 2.f - text_bounds.left,
+                         bounds.top + (bounds.height - text_bounds.height) / 2.f - text_bounds.top - 2.f);
+        window_.draw(text);
     };
 
-    // The pause icon remains accessible while playing and closes the overlay too.
-    draw_asset({390, 790, 158, 145}, kMenuButton);
+    sf::RectangleShape menu_button({kMenuButton.width, kMenuButton.height});
+    menu_button.setPosition(kMenuButton.left, kMenuButton.top);
+    menu_button.setFillColor(kMenuButton.contains(mouse) ? sf::Color(36, 99, 148)
+                                                         : sf::Color(15, 49, 78, 230));
+    menu_button.setOutlineThickness(1.f);
+    menu_button.setOutlineColor(sf::Color(110, 164, 202));
+    window_.draw(menu_button);
+    for (int line = 0; line < 3; ++line) {
+        sf::RectangleShape bar({27.f, 3.f});
+        bar.setPosition(kMenuButton.left + 19.f,
+                        kMenuButton.top + 19.f + static_cast<float>(line) * 10.f);
+        bar.setFillColor(sf::Color::White);
+        window_.draw(bar);
+    }
     if (!pause_menu_open_) return;
 
     sf::RectangleShape shade({static_cast<float>(config::kWidth),
@@ -401,21 +430,20 @@ void ClientApp::draw_pause_menu() {
     window_.draw(shade);
     sf::RectangleShape panel({640.f, 470.f});
     panel.setPosition(320.f, 125.f);
-    panel.setFillColor(sf::Color(19, 22, 112, 235));
-    panel.setOutlineThickness(4.f);
-    panel.setOutlineColor(sf::Color(91, 196, 245));
+    panel.setFillColor(sf::Color(12, 34, 58, 245));
+    panel.setOutlineThickness(2.f);
+    panel.setOutlineColor(sf::Color(91, 145, 183));
     window_.draw(panel);
-
-    draw_asset({1080, 250, 350, 130}, kContinueButton);
-    draw_asset({380, 250, 350, 130}, kRestartButton);
-    draw_asset({15, 250, 350, 130}, kLobbyButton);
-    draw_asset(music_enabled_ ? sf::IntRect{380, 520, 350, 130}
-                              : sf::IntRect{15, 520, 350, 130},
-               kMusicButton);
-    draw_asset({390, 790, 158, 145}, kMenuButton);
+    draw_button(kContinueButton, "Continue");
+    draw_button(kRestartButton, "Restart");
+    draw_button(kLobbyButton, "Lobby");
+    draw_button(kMusicButton, "Musique", true, true, music_enabled_);
+    draw_button(kClickSoundButton, "Son", true, true, UiClickSound::instance().enabled());
 }
 
 void ClientApp::render() {
+    window_.setActive(true);
+    update_view();
     sync_world();
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);

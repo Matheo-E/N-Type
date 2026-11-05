@@ -96,14 +96,14 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 | [Protocol.cpp](common/protocol/Protocol.cpp) | Binary encoding and decoding of every message ([PROTOCOL_v2.md](docs/PROTOCOL_v2.md)) |
 | [GameConfig.hpp](shared/GameConfig.hpp) | Settings both sides agree on: port, world size, speed, player count |
 | [Options.hpp](shared/Options.hpp) | Shared command-line parsing |
-| [assets/](assets/) | Organized backgrounds, sprites, UI sheets, music and sound effects |
+| [assets/](assets/) | Organized backgrounds, sprites, music and sound effects |
 
 ## Asset organization
 
 All runtime resources live under a single `assets/` root. Backgrounds are kept
-by level and ambience under `backgrounds/`; player, enemy and effect sprite sheets
-are under `sprites/`; launcher and pause-menu sheets are under `ui/`; music and
-sound effects are under `audio/`. See [assets/README.md](assets/README.md) for the
+by level and ambience under `backgrounds/`; player, enemy and effect sprites are
+under `sprites/`; music and sound effects are under `audio/`. Interface controls
+are drawn directly with SFML. See [assets/README.md](assets/README.md) for the
 complete layout and naming rules.
 
 ## Parallax backgrounds
@@ -120,8 +120,7 @@ time-based scroll. Each layer uses a different speed factor, so the scenery keep
 moving even while the player is stationary. Server positions and collision bounds
 remain authoritative and are not affected by this visual movement.
 Day/night changes use a smooth six-second crossfade. The incoming four-layer
-scene is preloaded and composited before blending, so transparent foregrounds
-do not flicker or fade at different apparent speeds.
+scene is preloaded and blended directly into the window.
 
 Background configuration is centralized in
 `client/src/BackgroundConfig.hpp`. To tune the scrolling, edit
@@ -130,9 +129,8 @@ Background configuration is centralized in
 zero to return to camera-only scrolling. Timing is controlled by `kDayNightPeriodSeconds` and
 `kTemporaryLevelDurationSeconds`; development builds can use shorter values for
 testing. Fade length is controlled by `kDayNightFadeDurationSeconds`. To add a
-level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, its
-preview names to `kPreviewFiles`, and provide both ambience folders with the four
-ordered layers and a `preview.png` or `preview.jpg`.
+level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, and
+provide both ambience folders with the four ordered layers.
 
 The source strips repeat as supplied. The renderer remains gap-free at every
 distance, but a visible artwork seam may occur if replacement images do not have

@@ -14,9 +14,12 @@ assets/
 ├── sprites/
 │   ├── effects/
 │   ├── enemies/{level_01_ice,level_02_candy,level_03_dentist_lab}/
+│   ├── lobby/bg_gradient.png
 │   └── player/
-└── ui/
 ```
+
+Buttons, fields and panels are drawn directly with SFML; they do not require UI
+sprite sheets.
 
 Each background ambience contains these four ordered layers:
 
@@ -25,8 +28,6 @@ Each background ambience contains these four ordered layers:
 3. `layer_03_near.png`
 4. `layer_04_ground.png`
 
-It also contains a composite `preview` image. The level 3 day preview is a real
-JPEG and intentionally remains `preview.jpg`; the other previews are PNG files.
 The runtime mapping is centralized in `client/src/BackgroundConfig.hpp`.
 
 `audio/sfx/button_click.mp3` was renamed from
