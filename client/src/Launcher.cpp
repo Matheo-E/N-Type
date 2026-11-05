@@ -356,7 +356,10 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                     click_sound.set_enabled(!click_sound.enabled());
                     continue;
                 }
-                if (settings_open) continue;
+                if (settings_open) {
+                    settings_open = false;
+                    continue;
+                }
                 if (page != Page::Connection && back_button.contains(point)) {
                     click_sound.play();
                     page = page == Page::Browser ? Page::Connection : Page::Browser;
@@ -529,9 +532,23 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& 
                         full ? "Enter game" : "Waiting for players...", mouse, mouse_pressed,
                         full, style::success, style::success_hover);
         }
-        if (page != Page::Connection)
-            draw_button(window, *font, back_button, "<", mouse, mouse_pressed, true,
-                        style::primary, style::primary_hover);
+        if (page != Page::Connection) {
+            const sf::Color arrow_color = sf::Color::Black;
+            sf::RectangleShape shaft({25.f, 2.f});
+            shaft.setPosition(back_button.left + 10.f, back_button.top + 15.f);
+            shaft.setFillColor(arrow_color);
+            window.draw(shaft);
+            sf::RectangleShape upper({13.f, 2.f});
+            upper.setPosition(back_button.left + 9.f, back_button.top + 15.f);
+            upper.setRotation(-40.f);
+            upper.setFillColor(arrow_color);
+            window.draw(upper);
+            sf::RectangleShape lower({13.f, 2.f});
+            lower.setPosition(back_button.left + 9.f, back_button.top + 15.f);
+            lower.setRotation(40.f);
+            lower.setFillColor(arrow_color);
+            window.draw(lower);
+        }
         draw_rounded_rect(window, settings_button, 7.f,
                           settings_button.contains(mouse) ? style::primary_hover : style::primary,
                           style::border, 1.f);
