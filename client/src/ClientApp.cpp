@@ -25,6 +25,8 @@ const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange",
 
 constexpr int kPlayerFrameSize = 724;
 constexpr float kRenderedPlayerSize = 88.f;
+constexpr float kPlayerAnimationSpeed = 8.f;
+constexpr int kPlayerAnimationFrames[] = {0, 1, 2, 1};
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
 const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
 const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
@@ -53,16 +55,21 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 
 } // namespace
 
-ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::string& name,
+ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, const std::string& name,
                      const std::string& host, const std::uint16_t port,
                      const bool music_enabled)
-    : name_(name), network_(host, port), window_(window), fullscreen_(fullscreen),
+    : name_(name), network_(host, port), window_(window), window_state_(window_state),
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
     const std::string player_path = asset_dir + "/sprites/player/tooth.png";
     if (!player_texture_.loadFromFile(player_path))
         throw std::runtime_error("Unable to load player sprite: " + player_path);
     if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
+    if (!pause_gui_.buttons.loadFromFile(asset_dir + "/FreeGUI/png/Button.png") ||
+        !pause_gui_.windows.loadFromFile(asset_dir + "/FreeGUI/png/Window.png"))
+        throw std::runtime_error("Unable to load pause menu assets");
+    pause_gui_.buttons.setSmooth(true);
+    pause_gui_.windows.setSmooth(true);
     load_background(0, 0);
     create_window();
     load_level_music(0);
@@ -152,20 +159,8 @@ void ClientApp::update_adventure(const float elapsed_seconds) {
     ambience_transition_active_ = true;
 }
 
-void ClientApp::create_window(const bool recreate) {
-    if (!window_.isOpen() || recreate) {
-        if (fullscreen_) {
-            window_.create(sf::VideoMode::getDesktopMode(), "N-Type | Connecting",
-                           sf::Style::Fullscreen);
-        } else {
-            window_.create(sf::VideoMode(config::kWidth, config::kHeight),
-                           "N-Type | Connecting", sf::Style::Default);
-        }
-    } else {
-        window_.setTitle("N-Type | Connecting");
-        if (!fullscreen_) window_.setSize({config::kWidth, config::kHeight});
-    }
-    window_.setFramerateLimit(60);
+void ClientApp::create_window() {
+    window_state_.open(window_, "N-Type | Connecting");
     update_view();
 }
 
@@ -173,10 +168,20 @@ void ClientApp::update_view() {
     const auto size = window_.getSize();
     if (size.x == 0 || size.y == 0) return;
     const float window_ratio = static_cast<float>(size.x) / static_cast<float>(size.y);
-    const float visible_width = static_cast<float>(config::kHeight) * window_ratio;
-    sf::View view(sf::FloatRect((static_cast<float>(config::kWidth) - visible_width) / 2.f,
-                               0.f, visible_width, static_cast<float>(config::kHeight)));
-    view.setViewport({0.f, 0.f, 1.f, 1.f});
+    const float game_ratio = static_cast<float>(config::kWidth) /
+                             static_cast<float>(config::kHeight);
+    sf::View view(sf::FloatRect(0.f, 0.f, static_cast<float>(config::kWidth),
+                               static_cast<float>(config::kHeight)));
+    // Fit the complete play area into the retained window, without cropping it.
+    sf::FloatRect viewport{0.f, 0.f, 1.f, 1.f};
+    if (window_ratio > game_ratio) {
+        viewport.width = game_ratio / window_ratio;
+        viewport.left = (1.f - viewport.width) / 2.f;
+    } else {
+        viewport.height = window_ratio / game_ratio;
+        viewport.top = (1.f - viewport.height) / 2.f;
+    }
+    view.setViewport(viewport);
     window_.setView(view);
     window_.setActive(true);
     glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
@@ -214,8 +219,8 @@ void ClientApp::poll_events() {
             pause_menu_open_ = !pause_menu_open_;
         }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
-            fullscreen_ = !fullscreen_;
-            create_window(true);
+            window_state_.toggle_fullscreen(window_, "N-Type");
+            update_view();
         }
         if (event.type == sf::Event::Resized) update_view();
         if (event.type == sf::Event::MouseButtonPressed &&
@@ -286,8 +291,6 @@ void ClientApp::sync_world() {
         if (std::none_of(players.begin(), players.end(), [id](const auto& player) { return player.id == id; })) {
             world_.Positions.erase(it->second);
             world_.Rectangles.erase(it->second);
-            previous_positions_.erase(id);
-            last_movement_times_.erase(id);
             it = entities_.erase(it);
         } else {
             ++it;
@@ -355,64 +358,28 @@ void ClientApp::draw_parallax() {
         static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f));
 }
 
-/** @brief Draws the pause controls from SFML primitives and live text. */
+/** @brief Draws the pause controls using the shared FreeGUI skin. */
 void ClientApp::draw_pause_menu() {
-    const sf::Vector2f mouse = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+    const auto mouse = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
     const bool pressed = sf::Mouse::isButtonPressed(sf::Mouse::Left);
-    const auto draw_button = [&](const sf::FloatRect& bounds, const std::string& label,
-                                 const bool enabled = true, const bool toggle = false,
-                                 const bool active = true) {
-        sf::Color fill = enabled ? sf::Color(27, 78, 119) : sf::Color(55, 64, 74);
-        if (toggle) fill = active ? sf::Color(42, 132, 104) : sf::Color(55, 64, 74);
-        if (enabled && bounds.contains(mouse))
-            fill = pressed ? sf::Color(25, 68, 103)
-                           : (toggle && active ? sf::Color(52, 151, 119)
-                                               : sf::Color(76, 88, 103));
-        sf::RectangleShape button({bounds.width, bounds.height});
-        button.setPosition(bounds.left, bounds.top);
-        button.setFillColor(fill);
-        button.setOutlineThickness(2.f);
-        button.setOutlineColor(sf::Color(91, 145, 183));
-        window_.draw(button);
-        sf::Text text(label, ui_font_, bounds.height < 70.f ? 17U : 30U);
-        text.setFillColor(enabled ? sf::Color::White : sf::Color(155, 165, 175));
-        const auto text_bounds = text.getLocalBounds();
-        text.setPosition(bounds.left + (bounds.width - text_bounds.width) / 2.f - text_bounds.left,
-                         bounds.top + (bounds.height - text_bounds.height) / 2.f - text_bounds.top - 2.f);
-        window_.draw(text);
-    };
-
-    sf::RectangleShape menu_button({kMenuButton.width, kMenuButton.height});
-    menu_button.setPosition(kMenuButton.left, kMenuButton.top);
-    menu_button.setFillColor(kMenuButton.contains(mouse) ? sf::Color(36, 99, 148)
-                                                         : sf::Color(15, 49, 78, 230));
-    menu_button.setOutlineThickness(1.f);
-    menu_button.setOutlineColor(sf::Color(110, 164, 202));
-    window_.draw(menu_button);
-    for (int line = 0; line < 3; ++line) {
-        sf::RectangleShape bar({27.f, 3.f});
-        bar.setPosition(kMenuButton.left + 19.f,
-                        kMenuButton.top + 19.f + static_cast<float>(line) * 10.f);
-        bar.setFillColor(sf::Color::White);
-        window_.draw(bar);
-    }
+    pause_gui_.icon(window_, {3090, 315, 185, 195}, kMenuButton);
     if (!pause_menu_open_) return;
 
     sf::RectangleShape shade({static_cast<float>(config::kWidth),
                               static_cast<float>(config::kHeight)});
     shade.setFillColor(sf::Color(5, 8, 30, 185));
     window_.draw(shade);
-    sf::RectangleShape panel({640.f, 470.f});
-    panel.setPosition(320.f, 125.f);
-    panel.setFillColor(sf::Color(12, 34, 58, 245));
-    panel.setOutlineThickness(2.f);
-    panel.setOutlineColor(sf::Color(91, 145, 183));
-    window_.draw(panel);
-    draw_button(kContinueButton, "Continue");
-    draw_button(kRestartButton, "Restart");
-    draw_button(kLobbyButton, "Lobby");
-    draw_button(kMusicButton, "Musique", true, true, music_enabled_);
-    draw_button(kClickSoundButton, "Son", true, true, UiClickSound::instance().enabled());
+    pause_gui_.panel(window_, ui_font_, "Pause", {320.f, 125.f, 640.f, 470.f});
+    pause_gui_.button(window_, ui_font_, kContinueButton, "Continuer", mouse, pressed, true, 1, 32);
+    pause_gui_.button(window_, ui_font_, kRestartButton, "Recommencer", mouse, pressed, true, 0, 32);
+    pause_gui_.button(window_, ui_font_, kLobbyButton, "Lobby", mouse, pressed, true, 2, 24);
+    pause_gui_.button(window_, ui_font_, kMusicButton,
+                      music_enabled_ ? "Musique : ON" : "Musique : OFF", mouse, pressed,
+                      true, music_enabled_ ? 1 : 2, 18);
+    const bool sound_enabled = UiClickSound::instance().enabled();
+    pause_gui_.button(window_, ui_font_, kClickSoundButton,
+                      sound_enabled ? "Son : ON" : "Son : OFF", mouse, pressed,
+                      true, sound_enabled ? 1 : 2, 20);
 }
 
 void ClientApp::render() {
@@ -425,19 +392,12 @@ void ClientApp::render() {
     window_.clear(sf::Color::Black);
     draw_parallax();
 
+    // The wings keep flapping even when server positions do not change.
     const float animation_time = animation_clock_.getElapsedTime().asSeconds();
+    const int animation_step = static_cast<int>(animation_time * kPlayerAnimationSpeed) % 4;
+    const int frame = kPlayerAnimationFrames[animation_step];
     for (const auto& [player_id, entity] : entities_) {
         const auto position = world_.Positions.at(entity).Xy;
-        const auto previous = previous_positions_.find(player_id);
-        const bool position_changed = previous != previous_positions_.end() &&
-            (std::abs(position.x - previous->second.x) > 0.05f ||
-             std::abs(position.y - previous->second.y) > 0.05f);
-        if (position_changed) last_movement_times_[player_id] = animation_time;
-        const auto last_movement = last_movement_times_.find(player_id);
-        const bool moving = last_movement != last_movement_times_.end() &&
-                            animation_time - last_movement->second < 0.12f;
-        const int frame = moving ? 1 + static_cast<int>(animation_time * 8.f) % 2 : 0;
-
         sf::Sprite tooth(player_texture_);
         tooth.setTextureRect({frame * kPlayerFrameSize, 0, kPlayerFrameSize, kPlayerFrameSize});
         const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
@@ -445,7 +405,6 @@ void ClientApp::render() {
         const float offset = (kRenderedPlayerSize - config::kPlayerSize) / 2.f;
         tooth.setPosition(position.x - offset, position.y - offset);
         window_.draw(tooth);
-        previous_positions_[player_id] = position;
     }
     draw_pause_menu();
     window_.display();

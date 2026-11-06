@@ -14,6 +14,8 @@
 
 #include "ClientNetwork.hpp"
 #include "World.hpp"
+#include "GuiSkin.hpp"
+#include "WindowState.hpp"
 
 namespace ntype::client {
 
@@ -23,15 +25,15 @@ enum class GameExitAction { Quit, Restart, Lobby };
 class ClientApp {
 public:
     /**
-     * @brief Creates the network client and loads one of the six parallax themes.
+     * @brief Creates the network client and loads the first adventure background.
      * @param window Shared application window.
-     * @param fullscreen Shared fullscreen state.
+     * @param window_state Window preferences retained across all screens.
      * @param name Player display name.
      * @param host Server hostname or address.
      * @param port UDP server port.
      * @param music_enabled Initial music preference retained across screens.
      */
-    ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::string& name,
+    ClientApp(sf::RenderWindow& window, WindowState& window_state, const std::string& name,
               const std::string& host, std::uint16_t port, bool music_enabled);
     /** @brief Runs one game session until quit, restart, or return-to-lobby is selected. */
     GameExitAction run();
@@ -43,7 +45,7 @@ private:
     std::uint8_t read_input() const;
     void sync_world();
     void render();
-    void create_window(bool recreate = false);
+    void create_window();
     void update_view();
     /** @brief Draws four horizontally repeated layers at configured speeds. */
     void draw_parallax();
@@ -59,9 +61,10 @@ private:
 
     ClientNetwork network_;
     sf::RenderWindow& window_;
-    bool& fullscreen_;
+    WindowState& window_state_;
     sf::Texture player_texture_;
     sf::Font ui_font_;
+    GuiSkin pause_gui_;
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
     std::array<sf::Texture, 4> transition_background_textures_;
@@ -81,8 +84,6 @@ private:
     // Engine world mirroring the latest snapshot: one entity per player.
     World world_;
     std::map<std::uint16_t, int> entities_; // player id -> engine entity
-    std::map<std::uint16_t, sf::Vector2f> previous_positions_;
-    std::map<std::uint16_t, float> last_movement_times_;
 };
 
 } // namespace ntype::client

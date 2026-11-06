@@ -6,6 +6,8 @@
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
+#include "WindowState.hpp"
+
 namespace ntype::client {
 
 struct ConnectionSettings {
@@ -17,13 +19,13 @@ struct ConnectionSettings {
 };
 
 /**
- * @brief Displays the connection screen or returns directly to the lobby browser.
+ * @brief Displays the title and connection screens, or returns to the main menu.
  * @param window Shared application window reused by the lobby and game.
- * @param fullscreen Shared fullscreen state.
+ * @param window_state Window preferences retained across all screens.
  * @param defaults Values retained from the previous session.
  * @param open_browser If true, skips the connection form when returning from a game.
  */
-std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, bool& fullscreen,
+std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, WindowState& window_state,
                                                 const ConnectionSettings& defaults,
                                                 bool open_browser = false);
 

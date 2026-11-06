@@ -11,7 +11,7 @@
 namespace ntype {
 
 struct Options {
-    std::string name = "Player";
+    std::string name;
     std::string host = "127.0.0.1";
     std::uint16_t port = config::kDefaultPort;
     bool help = false;

@@ -1,9 +1,9 @@
-# N-Type — Networked squares
+# N-Type
 
-A small demonstration: one square per connected player, up to four players on
-one UDP server. One player alone sees one square. Each new player's square appears
-on every client when they connect. Each client controls only its own square.
-The server computes all movement; clients send keys and display server positions.
+A C++20/SFML side-scrolling multiplayer prototype. Up to four animated tooth
+characters share one UDP server. The server controls positions; clients send keys
+and display snapshots. Scenery scrolls automatically at a constant speed,
+independently of player movement.
 
 ## Build
 
@@ -50,17 +50,39 @@ Start one client per player (in separate terminals or on different computers):
 ./r-type_client -n Player -h 127.0.0.1 -p 4242
 ```
 
-The client first opens a small SFML connection window. Enter a player name, host
-and port, then select **Connect** to open the game. Command-line values are used
-as the form defaults. The window can be freely resized or maximized; press **F11**
-to enter or leave fullscreen mode. The game window has the same controls. Both
-windows preserve their aspect ratio so text and graphics are never stretched.
-After the connection form, the client displays a lobby browser: join the local
-lobby on the left, or create one on the right by choosing its name, capacity,
-then start the single automatic adventure. There is no map or ambience selection;
-lobby isolation is not part of the network protocol yet.
-Multiplayer rooms only enable **Enter game** once their displayed capacity is full.
-Use **Play solo** to start immediately without creating a lobby.
+The client opens the illustrated `back_play.png` title screen with a red **PLAY**
+button available immediately. The menu soundtrack starts on this screen and
+continues through the launcher. Click PLAY or press Enter to open connection.
+
+The player name is empty by default. Host and port start at `127.0.0.1:4242`;
+command-line options override these defaults. Enter a name and select
+**Se connecter** to reach the main menu:
+
+- **Join lobby** opens a separate list with selection and a **Rejoindre** button.
+  An empty list displays a message. The mouse wheel scrolls longer lists.
+- **Create lobby** opens the existing name and capacity form (2–4 players), now
+  styled with FreeGUI. Creating a lobby adds it to the list.
+- **Play solo** checks the selected server and starts the game directly.
+- **Meilleur score** reserves a dedicated panel; `--` is a placeholder, with no
+  score calculation or saving yet.
+
+Lobby creation, selection and player counts are currently local UI state. They
+are not discovered or synchronized between clients, and the list is reset when
+the launcher is recreated after a game. Multiplayer waiting enables **Jouer**
+only when the displayed capacity is full; live room membership is not implemented.
+Use Play solo to enter the shared server now. There is no map or ambience selector.
+
+The menu uses `back_lobby.png` when present, otherwise the supplied
+`back_menu.png`. FreeGUI panels, ribbons, fields, buttons and icons style the
+connection form, main menu, lobby screens, settings and in-game pause menu.
+The main menu has no title ribbon. Text is rasterized above its displayed pixel
+size and aligned to window pixels to reduce pixelation when resized.
+
+The same native window is reused when starting, restarting and returning to the
+menu. Its size and position are retained; **F11** switches fullscreen and restores
+the previous windowed size and position, even across screen transitions. Gameplay
+always shows the full 1280×720 play area with bars when needed, without stretching.
+Escape returns to the previous launcher screen; on the title screen it quits.
 
 On another computer, replace `127.0.0.1` with the **server computer's IPv4 address**.
 Windows uses `r-type_server.exe` and `r-type_client.exe` with the same arguments.
@@ -68,9 +90,14 @@ Linux and Windows clients use the same binary protocol and can join the same ser
 Allow inbound **UDP 4242** on the server firewall. Internet hosting also requires
 appropriate router/hosting configuration; a LAN address is only reachable on that LAN.
 
-- Move your tooth: arrows, WASD or ZQSD. Its sprite animates while moving. Space sends "fire" (not used by the server yet).
+- Move your tooth: arrows, WASD or ZQSD. Its wings animate continuously, including
+  while stationary, using frames 0 → 1 → 2 → 1 at 8 steps per second. Animation
+  changes only the sprite, not server positions or collision bounds. Space sends
+  "fire" (not used by the server yet).
 - Pause menu: Escape or the menu icon. It can resume, restart, return to the lobby,
-  or toggle music. Close the window to quit.
+  or toggle music and click sounds. The pause controls also use FreeGUI assets.
+  This menu stops local movement input; the multiplayer server keeps running.
+  Scenery and wing animation continue while it is open. Close the window to quit.
 - Music loops automatically: `audio/music/lobby.mp3` in the launcher, then
   `level_01_ice.mp3`, `level_02_candy.mp3`, or `level_03_dentist_lab.mp3`
   according to the current automatic level. The Son ON/OFF preference is
@@ -79,14 +106,17 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
   stopped before the next screen starts, so tracks never overlap.
 - The window title identifies your player and connection status.
 - A fifth player waits with a "Server full" status and retries automatically.
-- Before connecting, or after a connection timeout, no squares are displayed.
+- Before connecting, or after a connection timeout, no player sprites are displayed.
 
 ## Files
 
 | File | Responsibility |
 |------|----------------|
-| [engine/](engine/) | Minimal ECS (World, components, Movement and Draw systems), maintained on the `Engine` branch |
+| [engine/](engine/) | Shared ECS: World, components, Movement and Draw systems |
 | [ClientApp.cpp](client/src/ClientApp.cpp) | Window and keyboard; mirrors snapshots into an engine World and draws it |
+| [Launcher.cpp](client/src/Launcher.cpp) | Title, connection, main menu, lobby forms and settings |
+| [GuiSkin.hpp](client/src/GuiSkin.hpp) | Shared FreeGUI drawing and smooth text helpers |
+| [WindowState.hpp](client/src/WindowState.hpp) | Shared window bounds and fullscreen restoration |
 | [ClientNetwork.cpp](client/src/ClientNetwork.cpp) | Send keys, receive snapshots and reconnect |
 | [main.cpp](client/src/main.cpp) | Start the client and parse options |
 | [server/src/main.cpp](server/src/main.cpp) | Start the server and parse options |
@@ -103,7 +133,8 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 All runtime resources live under a single `assets/` root. Backgrounds are kept
 by level and ambience under `backgrounds/`; player, enemy and effect sprites are
 under `sprites/`; music and sound effects are under `audio/`. Interface controls
-are drawn directly with SFML. See [assets/README.md](assets/README.md) for the
+use the original `FreeGUI/png/Button.png` and `Window.png` sprite sheets,
+with labels rendered by SFML. See [assets/README.md](assets/README.md) for the
 complete layout and naming rules.
 
 ## Parallax backgrounds
@@ -180,5 +211,22 @@ python3 tests/network_smoke.py ./r-type_server
 They check connection, movement across the viewport and all four boundaries, up to four
 players, independent movement, malformed packets, refusal of a fifth player,
 repeated connects, disconnects, id reuse and crash timeouts.
-For the window, start two real clients and check that the second square appears
-and disappears as the other client connects and quits.
+For visual checks:
+
+1. Start without `-n`: PLAY must be visible immediately, with menu music. The
+   connection name must be empty and host/port prefilled.
+2. Check the FreeGUI connection, main menu, lobby list, creation and settings;
+   the best-score card must show `--` and the main menu must have no title ribbon.
+3. Enter Play solo. Leave the tooth stationary and check that its wings keep
+   flapping. Move to all four edges: the entire play area must remain visible,
+   and background speed must stay constant in every direction.
+4. Open pause with Escape or the icon. Check Continue, Restart, Lobby, music and
+   click-sound controls, including their labels and FreeGUI artwork.
+5. Resize, restart, return to the menu and launch again. Window dimensions must
+   stay the same. Toggle F11 in one screen and leave fullscreen in another:
+   the previous windowed size and position must return.
+6. Start a second client: both teeth must animate, and the second disappears when
+   its client disconnects.
+
+Code follows the simple conventions in [the project guide](docs/PROJECT_GUIDE.md#7-conventions).
+The root `.clang-format` records indentation, braces and spacing for future edits.
