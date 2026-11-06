@@ -45,8 +45,6 @@ private:
     void render();
     void create_window(bool recreate = false);
     void update_view();
-    /** @brief Smoothly follows the local player's horizontal server position. */
-    void update_camera(float elapsed_seconds);
     /** @brief Draws four horizontally repeated layers at configured speeds. */
     void draw_parallax();
     void draw_parallax_layers(sf::RenderTarget& target,
@@ -69,9 +67,7 @@ private:
     std::array<sf::Texture, 4> transition_background_textures_;
     sf::Clock animation_clock_;
     sf::Clock frame_clock_;
-    float camera_x_ = 0.f;
     double automatic_background_x_ = 0.0;
-    bool camera_initialized_ = false;
     bool pause_menu_open_ = false;
     bool music_enabled_ = true;
     bool session_active_ = true;

@@ -30,7 +30,7 @@ inline constexpr std::array<const char*, kLayerCount> kLayerFiles{
  * @brief Base speed of the automatic background scroll, in pixels per second.
  *
  * Each layer multiplies this speed by its Parallax factor below. Set this value
- * to zero to restore a background driven only by the player camera.
+ * to zero to stop the background.
  */
 inline constexpr float kAutomaticScrollSpeed = 100.f;
 static_assert(kAutomaticScrollSpeed >= 0.f);
@@ -38,8 +38,8 @@ static_assert(kAutomaticScrollSpeed >= 0.f);
 /**
  * @brief Relative scrolling speed of each layer, from distant scenery to ground.
  *
- * A value of 1 follows the camera exactly. Smaller values create depth by moving
- * more slowly. These are the only values to change when tuning the parallax.
+ * A value of 1 uses the base automatic speed. Smaller values create depth by
+ * moving more slowly. These are the only values to change when tuning the parallax.
  */
 inline constexpr std::array<float, kLayerCount> kParallaxFactors{0.08f, 0.25f, 0.55f, 1.0f};
 

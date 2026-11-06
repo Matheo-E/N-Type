@@ -25,8 +25,6 @@ const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange",
 
 constexpr int kPlayerFrameSize = 724;
 constexpr float kRenderedPlayerSize = 88.f;
-constexpr float kCameraAnchorX = 320.f;
-constexpr float kCameraResponsiveness = 10.f;
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
 const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
 const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
@@ -306,32 +304,10 @@ void ClientApp::sync_world() {
 }
 
 /**
- * @brief Smoothly follows the local player while leaving server coordinates untouched.
- * @param elapsed_seconds Time elapsed since the previous rendered frame.
- */
-void ClientApp::update_camera(const float elapsed_seconds) {
-    const auto local_id = network_.id();
-    if (!local_id) return;
-    const auto entity = entities_.find(*local_id);
-    if (entity == entities_.end()) return;
-
-    const float player_x = world_.Positions.at(entity->second).Xy.x;
-    const float target = std::max(0.f, player_x - kCameraAnchorX);
-    if (!camera_initialized_) {
-        camera_x_ = target;
-        camera_initialized_ = true;
-        return;
-    }
-    const float blend = std::min(1.f, elapsed_seconds * kCameraResponsiveness);
-    camera_x_ += (target - camera_x_) * blend;
-}
-
-/**
  * @brief Draws one complete Parallax background into a render target.
  *
- * Each layer combines the player camera with a time-based automatic distance,
- * then multiplies that total by its configured factor. The background therefore
- * keeps moving while the player is stationary without changing world positions.
+ * Each layer uses only the time-based automatic distance multiplied by its
+ * configured factor. Scrolling speed stays constant regardless of player movement.
  * Two copies are sufficient because every source image is wider than the viewport
  * after scaling; a third copy is drawn defensively for future narrower assets.
  *
@@ -346,10 +322,8 @@ void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
         const float scale = static_cast<float>(config::kHeight) /
                             static_cast<float>(texture_size.y);
         const float tile_width = static_cast<float>(texture_size.x) * scale;
-        const double scrolling_x =
-            static_cast<double>(camera_x_) + automatic_background_x_;
         float offset = static_cast<float>(std::fmod(
-            scrolling_x * static_cast<double>(background::kParallaxFactors[layer]),
+            automatic_background_x_ * static_cast<double>(background::kParallaxFactors[layer]),
             static_cast<double>(tile_width)));
         if (offset < 0.f) offset += tile_width;
 
@@ -447,7 +421,6 @@ void ClientApp::render() {
     sync_world();
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);
-    update_camera(elapsed_seconds);
     automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
     window_.clear(sf::Color::Black);
     draw_parallax();
@@ -470,7 +443,7 @@ void ClientApp::render() {
         const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
         tooth.setScale(scale, scale);
         const float offset = (kRenderedPlayerSize - config::kPlayerSize) / 2.f;
-        tooth.setPosition(position.x - camera_x_ - offset, position.y - offset);
+        tooth.setPosition(position.x - offset, position.y - offset);
         window_.draw(tooth);
         previous_positions_[player_id] = position;
     }

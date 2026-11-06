@@ -84,16 +84,6 @@ def check(binary):
         alone = first.wait(SNAPSHOT)
         assert alone['players'] == {1: SPAWNS[1]}
 
-        # Horizontal progression is not limited by the 1280-pixel viewport.
-        first.input(RIGHT)
-        beyond_old_edge = first.wait(
-            SNAPSHOT, lambda s: s['players'][1][0] > 1500, timeout=6)
-        assert beyond_old_edge['players'][1][0] > 1500
-        first.input(LEFT)
-        returned = first.wait(SNAPSHOT, lambda s: s['players'][1][0] <= 100, timeout=6)
-        assert returned['players'][1][0] <= 100
-        first.input(0)
-
         # Malformed packets, or a server-only message from a stranger, must not create a player.
         fifth.socket.send(b'garbage')
         fifth.socket.send(bytes([CONNECT, 0]))
@@ -136,6 +126,22 @@ def check(binary):
         second.send(CONNECT)
         assert second.wait(ACCEPT) == 2
 
+        # Players can reach every screen edge, and held input cannot leave it.
+        first.input(RIGHT | DOWN)
+        first.wait(
+            SNAPSHOT, lambda s: s['players'][1] == (1240, 680), timeout=4.5)
+        first.input(RIGHT | DOWN)  # Refresh keepalive while still pushing outward.
+        assert first.skip(12)['players'][1] == (1240, 680)
+        first.input(LEFT | UP)
+        first.wait(
+            SNAPSHOT, lambda s: s['players'][1] == (0, 0), timeout=4.5)
+        first.input(LEFT | UP)
+        assert first.skip(12)['players'][1] == (0, 0)
+        first.input(RIGHT | DOWN)
+        first.wait(SNAPSHOT, lambda s: s['players'][1][0] >= 100 and
+                   s['players'][1][1] >= 100)
+        first.input(0)
+
         # Silent (crashed) peers disappear after the timeout; the active one stays.
         deadline = time.monotonic() + 8
         timed_out = False
@@ -149,7 +155,7 @@ def check(binary):
                 continue
         assert timed_out, 'Crashed peers did not disappear'
         assert server.poll() is None
-        print('PASS: unlimited rightward movement, return movement, four players, malformed packets,')
+        print('PASS: full viewport movement, four screen boundaries, four players, malformed packets,')
         print('      independent movement, disconnect, id reuse and crash timeout.')
     finally:
         for peer in peers:

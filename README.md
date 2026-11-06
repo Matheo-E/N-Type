@@ -115,9 +115,9 @@ The current short test timings are defined by `kTemporaryLevelDurationSeconds`
 and `kDayNightPeriodSeconds`. Every ambience is assembled in this order:
 `layer_01_far.png`, `layer_02_middle.png`, `layer_03_near.png`, then
 `layer_04_ground.png`.
-The layers repeat horizontally and combine the local camera with a continuous,
-time-based scroll. Each layer uses a different speed factor, so the scenery keeps
-moving even while the player is stationary. Server positions and collision bounds
+The layers repeat horizontally with a continuous, time-based scroll independent
+of player movement. Each layer uses a constant speed factor, so the scenery keeps
+moving at the same speed while the player moves anywhere in the fixed viewport. Server positions and collision bounds
 remain authoritative and are not affected by this visual movement.
 Day/night changes use a smooth six-second crossfade. The incoming four-layer
 scene is preloaded and blended directly into the window.
@@ -126,7 +126,7 @@ Background configuration is centralized in
 `client/src/BackgroundConfig.hpp`. To tune the scrolling, edit
 `kAutomaticScrollSpeed` (base speed in pixels per second) and
 `kParallaxFactors` (relative speed of each layer). Set the automatic speed to
-zero to return to camera-only scrolling. Timing is controlled by `kDayNightPeriodSeconds` and
+zero to stop the background. Timing is controlled by `kDayNightPeriodSeconds` and
 `kTemporaryLevelDurationSeconds`; development builds can use shorter values for
 testing. Fade length is controlled by `kDayNightFadeDurationSeconds`. To add a
 level, add its folder to `kLevelFolders`, its soundtrack to `kMusicFiles`, and
@@ -163,10 +163,9 @@ then the payload, little-endian. This demo uses these messages:
 Messages 6–8, 10 and 12 (entity spawn/update/destroy, player events, game state) are
 not used yet. Keys: up=1, down=2, left=4, right=8, shoot=16. Players 1–4 are blue,
 orange, green and pink; a freed id is reused by the next player. Positions refer to
-the entity's top-left corner. Y stays within 0…680 in the 1280×720 viewport, with
-40×40 entities moving at 300 pixels/s. The vertical position is limited to the
-viewport and the level has a left edge at x=0, but horizontal progression to the
-right is not tied to the viewport or background width. Invalid packets are ignored.
+the entity's top-left corner. X stays within 0…1240 and Y within 0…680 in the
+1280×720 viewport, with 40×40 entities moving at 300 pixels/s. Players can traverse
+the entire viewport and are stopped at all four edges. Invalid packets are ignored.
 
 ## Verification
 
@@ -178,7 +177,7 @@ ctest --test-dir build/client-linux-release --output-on-failure
 python3 tests/network_smoke.py ./r-type_server
 ```
 
-They check connection, movement beyond the old viewport edge and back, up to four
+They check connection, movement across the viewport and all four boundaries, up to four
 players, independent movement, malformed packets, refusal of a fifth player,
 repeated connects, disconnects, id reuse and crash timeouts.
 For the window, start two real clients and check that the second square appears

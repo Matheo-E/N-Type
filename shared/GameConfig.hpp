@@ -10,7 +10,7 @@ namespace ntype::config {
 inline constexpr std::uint16_t kDefaultPort = 4242;
 inline constexpr std::size_t kMaxPlayers = 4; // Player ids 1 to 4.
 
-// Logical viewport size. Horizontal level progression is not limited by kWidth.
+// Fixed logical play area. Players stay inside these viewport bounds.
 inline constexpr unsigned kWidth = 1280;
 inline constexpr unsigned kHeight = 720;
 inline constexpr float kPlayerSize = 40.0F;

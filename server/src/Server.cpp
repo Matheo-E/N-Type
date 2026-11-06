@@ -19,6 +19,7 @@ constexpr int kTickRate = 60;
 constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
 
+constexpr float kMaxX = static_cast<float>(config::kWidth) - config::kPlayerSize;
 constexpr float kMaxY = static_cast<float>(config::kHeight) - config::kPlayerSize;
 
 bool pressed(const std::uint8_t keys, const InputType key) {
@@ -158,9 +159,8 @@ void Server::move_players() {
     Movement(world_, kDt);
     for (const auto& [endpoint, player] : players_) {
         auto& position = world_.Positions[player.entity].Xy;
-        // The level scrolls horizontally: only its explicit starting edge is solid.
-        // There is no implicit right edge tied to the viewport or background width.
-        position.x = std::max(position.x, 0.0F);
+        // Players move across a fixed viewport while scenery scrolls independently.
+        position.x = std::clamp(position.x, 0.0F, kMaxX);
         position.y = std::clamp(position.y, 0.0F, kMaxY);
     }
 }
