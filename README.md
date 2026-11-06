@@ -208,6 +208,15 @@ the entity's top-left corner. X stays within 0…1240 and Y within 0…680 in th
 1280×720 viewport, with 40×40 entities moving at 300 pixels/s. Players can traverse
 the entire viewport and are stopped at all four edges. Invalid packets are ignored.
 
+## Enemy catalogue
+
+`assets/data/enemies.json` defines twelve enemies across the three levels,
+including bosses Theice (200 HP), Candybear (250 HP) and Carry (500 HP).
+Their sprites, planned attacks, damage, delays and stronger boss phases are
+documented in [docs/ENEMIES.md](docs/ENEMIES.md). The new combat fields are
+prepared data: the current engine ignores them, and the network server does not
+yet spawn these enemies. This does not activate combat or best-score tracking.
+
 ## Verification
 
 After building, run the protocol unit test and the black-box server checks

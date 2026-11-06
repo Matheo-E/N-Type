@@ -342,41 +342,25 @@ independent of frame rate.
 
 ## 6. The enemy data file
 
-`assets/data/enemies.json`:
+`assets/data/enemies.json` now defines twelve unique enemies, grouped by level:
+11–14 (ice), 21–24 (candy), and 31–34 (dentist). The last id in each group is
+the boss. HP and speed match the requested values; radii, sprite scales,
+projectiles, damage, cadence, area attacks and boss phases are authored there.
 
-```json
-{
-  "enemies": [
-    {
-      "id": 1,
-      "name": "fairy",
-      "hp": 10,
-      "radius": 14,
-      "color": [200, 60, 60],
-      "speed": 80,
-      "fire_interval": 1.2,
-      "attack_pattern": 1,
-      "flight_pattern": 1,
-      "sprite": { "texture": "sprites/bydos.png", "rect": [5, 6, 21, 24], "scale": 2 }
-    }
-  ]
-}
-```
+See [the enemy catalogue](ENEMIES.md) for every enemy, the balancing choices,
+units, field meanings and the boundary between loaded and planned behavior.
 
-| Key | Meaning | Default |
-|---|---|---|
-| `id` | **Required.** The number passed to `CreateEEnemy`. | none |
-| `name` | Display name (`EName`). | `"enemy"` |
-| `hp` | Hit points (`EHealth`). | 1 |
-| `radius` | Size of the circle, and of the hurtbox. | 16 |
-| `color` | `[r, g, b]`, each 0-255. | white |
-| `speed` | Movement speed (`ESpeed`). | 0 |
-| `fire_interval` | Seconds between volleys (`ESpawner.Interval`). | 1.0 |
-| `attack_pattern` | Id of the bullet pattern. **-1 or absent: the enemy has no `ESpawner`.** | -1 |
-| `flight_pattern` | Id of the movement pattern. **-1 or absent: the enemy has no `EFlight`.** | -1 |
-| `sprite` | Optional object: `texture` (path relative to `assets/`), `rect` (`[x, y, width, height]` in the image, for a sprite sheet cell) and `scale`. **Absent: the enemy is drawn as a circle of colour `color`.** | none |
+The current loader reads `id`, `name`, `hp`, `radius`, `color`, `speed`,
+`fire_interval`, `attack_pattern`, `flight_pattern` and `sprite`. New fields
+such as `level`, `role`, `contact_damage`, `score`, `movement`, `attacks` and
+`enrage` are preparation data and are currently ignored by the engine.
+Legacy pattern ids stay at -1 to avoid enabling incompatible vertical-demo
+behavior. The network server does not spawn these enemies yet.
 
-The pattern ids select the built-in patterns listed in section 5.5.
+`id` is required. Missing supported fields keep their `EnemyData` defaults.
+Sprite paths are relative to `assets/`; `rect` selects the source rectangle
+and `scale` sets its uniform scale. The old standalone `src/main.cpp` still
+references ids 1/2 and must be updated if brought back into the build.
 
 ---
 
