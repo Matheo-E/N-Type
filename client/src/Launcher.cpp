@@ -83,6 +83,18 @@ void draw_texture_cover(sf::RenderWindow& window, const sf::Texture& texture,
     draw_texture_region(window, texture, source, destination);
 }
 
+void draw_logo(sf::RenderWindow& window, const sf::Texture& texture,
+               const sf::FloatRect& bounds) {
+    const sf::Vector2u size = texture.getSize();
+    const float scale = std::min(bounds.width / static_cast<float>(size.x),
+                                 bounds.height / static_cast<float>(size.y));
+    sf::Sprite logo(texture);
+    logo.setScale(scale, scale);
+    logo.setPosition(bounds.left + (bounds.width - static_cast<float>(size.x) * scale) / 2.f,
+                     bounds.top + (bounds.height - static_cast<float>(size.y) * scale) / 2.f);
+    window.draw(logo);
+}
+
 void update_launcher_view(sf::RenderWindow& window) {
     constexpr float logical_height = 410.f;
     const auto size = window.getSize();
@@ -173,16 +185,18 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     click_sound.set_enabled(defaults.click_sound_enabled);
     bool music_enabled = defaults.music_enabled;
     const std::string assets = NTYPE_ASSET_DIR;
-    sf::Texture lobby_background, title_background;
+    sf::Texture lobby_background, title_background, game_logo;
     GuiSkin gui;
     const auto lobby_path = assets + "/backgrounds/lobby/back_lobby.png";
     if (!lobby_background.loadFromFile(std::filesystem::exists(lobby_path)
             ? lobby_path : assets + "/backgrounds/lobby/back_menu.png") ||
         !title_background.loadFromFile(assets + "/backgrounds/lobby/back_play.png") ||
+        !game_logo.loadFromFile(assets + "/sprites/La Contre-Attaque de M. Jean-cive.png") ||
         !gui.buttons.loadFromFile(assets + "/FreeGUI/png/Button.png") ||
         !gui.windows.loadFromFile(assets + "/FreeGUI/png/Window.png"))
         return std::nullopt;
-    for (auto* texture : {&lobby_background, &title_background, &gui.buttons, &gui.windows})
+    for (auto* texture : {&lobby_background, &title_background, &game_logo,
+                          &gui.buttons, &gui.windows})
         texture->setSmooth(true);
     sf::Music music;
     if (music.openFromFile(assets + "/audio/music/lobby.mp3")) {
@@ -422,6 +436,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
         window.clear();
         draw_texture_cover(window, page == Page::Title ? title_background : lobby_background, view);
         if (page == Page::Title) {
+            const float logo_width = std::min(400.f, view.width - 32.f);
+            draw_logo(window, game_logo, {(560.f - logo_width) / 2.f, 16.f, logo_width, 134.f});
             gui.button(window, *font, play_button, "PLAY", mouse, pressed, true, 2, 29);
             window.display();
             continue;
@@ -435,6 +451,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             gui.button(window, *font, connect_button, "Se connecter", mouse, pressed, true, 1);
         } else if (page == Page::Home) {
             gui.surface(window, panel);
+            draw_logo(window, game_logo, {170.f, 32.f, 220.f, 74.f});
             gui.button(window, *font, join_button, "Join lobby", mouse, pressed);
             gui.button(window, *font, create_button, "Create lobby", mouse, pressed, true, 1);
             gui.button(window, *font, solo_button, "Play solo", mouse, pressed, true, 2);

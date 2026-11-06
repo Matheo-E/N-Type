@@ -1,7 +1,7 @@
 # Game assets
 
 Project assets use lowercase `snake_case` names and are grouped by purpose.
-The supplied FreeGUI package retains its original folder and filename casing:
+The supplied FreeGUI package and game logo retain their original filenames:
 
 ```text
 assets/
@@ -19,6 +19,7 @@ assets/
 ├── sprites/
 │   ├── effects/
 │   ├── enemies/{level_01_ice,level_02_candy,level_03_dentist_lab}/
+│   ├── La Contre-Attaque de M. Jean-cive.png
 │   ├── lobby/bg_gradient.png
 │   └── player/
 ```
@@ -27,6 +28,10 @@ assets/
 is taken from the empty red rectangle in `FreeGUI/png/Button.png` and is available
 immediately. The menu uses `backgrounds/lobby/back_lobby.png` if supplied, falling
 back to `back_menu.png`. `sprites/lobby/bg_gradient.png` is legacy artwork.
+
+`sprites/La Contre-Attaque de M. Jean-cive.png` is the transparent game logo.
+It appears at the top of the PLAY screen and above the main-menu buttons,
+scaled proportionally with texture smoothing.
 
 `FreeGUI/png/Window.png` provides panels, field surfaces and red ribbons;
 `Button.png` provides colored buttons, settings/back icons and the score trophy.

@@ -75,6 +75,8 @@ Use Play solo to enter the shared server now. There is no map or ambience select
 The menu uses `back_lobby.png` when present, otherwise the supplied
 `back_menu.png`. FreeGUI panels, ribbons, fields, buttons and icons style the
 connection form, main menu, lobby screens, settings and in-game pause menu.
+The supplied game logo is centered above the tooth on the PLAY screen and
+shown in a smaller size above the main-menu buttons, without stretching it.
 The main menu has no title ribbon. Text is rasterized above its displayed pixel
 size and aligned to window pixels to reduce pixelation when resized.
 
