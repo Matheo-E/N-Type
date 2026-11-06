@@ -35,6 +35,8 @@ components, ready for later.
 - A title illustration with an immediately available red PLAY button and menu music.
 - FreeGUI connection, main menu, lobby creation/list, settings and pause screens.
   Player name starts empty; host and port remain prefilled.
+- A visual Controls screen shared by launcher settings and pause, with keyboard,
+  mouse and gamepad tabs. Assignments are previews; remapping is not implemented.
 - A placeholder best-score card (`--`), without score calculation or persistence.
 - Up to four continuously animated teeth, including at rest. Arrows, WASD or
   ZQSD move each player across the complete fixed 1280×720 play area.
@@ -120,6 +122,7 @@ CMakeLists.txt           build description
 client/src/main.cpp      opens the launcher and manages game/restart/menu transitions
 client/src/Launcher.cpp  title, connection, main menu, local lobby list and forms
 client/src/ClientApp.cpp server snapshots, tooth animation, parallax and pause UI
+client/src/ControlsMenu.cpp visual control tabs and row selection (no remapping)
 client/src/GuiSkin.hpp   shared FreeGUI panels/buttons and smooth text rendering
 client/src/WindowState.hpp window bounds and fullscreen restoration
 server/src/              authoritative movement, snapshots and network thread
@@ -326,6 +329,9 @@ independent of frame rate.
   `0, 1, 2, 1` animation sequence. It needs no movement history to animate.
   The background advances only with elapsed time, and the server clamps players
   to X=0…1240 and Y=0…680.
+- `ControlsMenu.cpp/.hpp` use a device enum, fixed label arrays and simple
+  click conditions. They draw the same preview in launcher and pause, restore
+  the caller's view after drawing, and leave input bindings unchanged.
 - `GuiSkin.hpp` stores the two UI textures and draws their original rectangles.
   It also creates higher-resolution SFML text and scales it to the logical UI.
 - `WindowState.hpp` keeps ordinary size/position fields. Transitions reuse the
@@ -502,6 +508,7 @@ These are mistakes that have already happened in this project.
 ## 10. What is not built yet
 
 - Networked room creation/discovery, isolation, synchronized capacity and membership.
+- Input remapping, binding persistence and mouse/gamepad gameplay integration.
 - Score calculation, best-score persistence, game over and boss-driven progression.
 - Server-driven enemies, combat and wave scheduling in the current network game.
 - Generic ECS UI/audio/animation integration. The client already has its own

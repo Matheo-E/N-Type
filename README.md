@@ -78,6 +78,13 @@ connection form, main menu, lobby screens, settings and in-game pause menu.
 The main menu has no title ribbon. Text is rasterized above its displayed pixel
 size and aligned to window pixels to reduce pixelation when resized.
 
+Settings and the pause menu now include **Controles**, with **Clavier**, **Souris**
+and **Manette** tabs. FreeGUI buttons show six actions and their displayed bindings;
+clicking a binding only highlights its row. Retour or Escape returns to the
+previous settings screen. This is a visual interface: it does not capture new
+keys, change gameplay input, save bindings, or detect connected devices. Mouse
+and gamepad bindings are proposed examples, not active controls.
+
 The same native window is reused when starting, restarting and returning to the
 menu. Its size and position are retained; **F11** switches fullscreen and restores
 the previous windowed size and position, even across screen transitions. Gameplay
@@ -115,6 +122,7 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 | [engine/](engine/) | Shared ECS: World, components, Movement and Draw systems |
 | [ClientApp.cpp](client/src/ClientApp.cpp) | Window and keyboard; mirrors snapshots into an engine World and draws it |
 | [Launcher.cpp](client/src/Launcher.cpp) | Title, connection, main menu, lobby forms and settings |
+| [ControlsMenu.cpp](client/src/ControlsMenu.cpp) | Shared visual keyboard/mouse/gamepad settings; no input remapping |
 | [GuiSkin.hpp](client/src/GuiSkin.hpp) | Shared FreeGUI drawing and smooth text helpers |
 | [WindowState.hpp](client/src/WindowState.hpp) | Shared window bounds and fullscreen restoration |
 | [ClientNetwork.cpp](client/src/ClientNetwork.cpp) | Send keys, receive snapshots and reconnect |
@@ -221,7 +229,9 @@ For visual checks:
    flapping. Move to all four edges: the entire play area must remain visible,
    and background speed must stay constant in every direction.
 4. Open pause with Escape or the icon. Check Continue, Restart, Lobby, music and
-   click-sound controls, including their labels and FreeGUI artwork.
+   click-sound controls, including their labels and FreeGUI artwork. Open Controles
+   from both settings and pause; switch tabs, select a row, return with Escape
+   and Retour, and verify that gameplay bindings remain unchanged.
 5. Resize, restart, return to the menu and launch again. Window dimensions must
    stay the same. Toggle F11 in one screen and leave fullscreen in another:
    the previous windowed size and position must return.

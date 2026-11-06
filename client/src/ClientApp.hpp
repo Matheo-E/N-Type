@@ -16,6 +16,7 @@
 #include "World.hpp"
 #include "GuiSkin.hpp"
 #include "WindowState.hpp"
+#include "ControlsMenu.hpp"
 
 namespace ntype::client {
 
@@ -65,6 +66,7 @@ private:
     sf::Texture player_texture_;
     sf::Font ui_font_;
     GuiSkin pause_gui_;
+    ControlsMenu controls_menu_;
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
     std::array<sf::Texture, 4> transition_background_textures_;

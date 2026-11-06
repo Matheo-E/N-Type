@@ -1,5 +1,6 @@
 #include "Launcher.hpp"
 #include "GuiSkin.hpp"
+#include "ControlsMenu.hpp"
 
 #include <algorithm>
 #include <array>
@@ -213,6 +214,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     unsigned current_players = 1;
     std::size_t active = 0;
     bool settings_open = false;
+    ControlsMenu controls_menu;
     std::string error;
     const sf::FloatRect panel{55.f, 60.f, 450.f, 315.f};
     const sf::FloatRect play_button{200.f, 330.f, 160.f, 70.f};
@@ -229,6 +231,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     const sf::FloatRect settings_button{502.f, 12.f, 43.f, 43.f};
     const sf::FloatRect music_toggle{170.f, 151.f, 220.f, 55.f};
     const sf::FloatRect click_toggle{170.f, 220.f, 220.f, 55.f};
+    const sf::FloatRect controls_button{170.f, 287.f, 220.f, 55.f};
     const auto go_back = [&]() {
         if (page == Page::Home) page = Page::Connection;
         else if (page == Page::Connection) page = Page::Title;
@@ -284,6 +287,9 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     while (window.isOpen()) {
         sf::Event event{};
         while (window.pollEvent(event)) {
+            if (controls_menu.open && controls_menu.handle_event(window, event)) {
+                continue;
+            }
             if (event.type == sf::Event::Closed) window.close();
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
                 if (settings_open) settings_open = false;
@@ -316,7 +322,10 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
                     continue;
                 }
                 if (settings_open) {
-                    if (music_toggle.contains(point)) {
+                    if (controls_button.contains(point)) {
+                        click_sound.play();
+                        controls_menu.open = true;
+                    } else if (music_toggle.contains(point)) {
                         click_sound.play();
                         music_enabled = !music_enabled;
                         if (music_enabled) music.play(); else music.pause();
@@ -488,13 +497,17 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             shade.setPosition(view.left, view.top);
             shade.setFillColor(sf::Color(21, 37, 67, 160));
             window.draw(shade);
-            gui.panel(window, *font, "Reglages", {130.f, 104.f, 300.f, 220.f});
+            gui.panel(window, *font, "Reglages", {130.f, 104.f, 300.f, 280.f});
             gui.button(window, *font, music_toggle, music_enabled ? "Musique : ON" : "Musique : OFF",
                        mouse, pressed, true, music_enabled ? 1 : 2);
             gui.button(window, *font, click_toggle, click_sound.enabled() ? "Son : ON" : "Son : OFF",
                        mouse, pressed, true, click_sound.enabled() ? 1 : 2);
-            gui.centered(window, *font, "F11 : plein ecran", {150.f, 286.f, 260.f, 23.f}, 13, style::muted);
+            gui.button(window, *font, controls_button, "Controles", mouse, pressed);
+            gui.centered(window, *font, "F11 : plein ecran", {150.f, 350.f, 260.f, 23.f}, 13, style::muted);
             gui.icon(window, {3090, 315, 185, 195}, settings_button);
+        }
+        if (controls_menu.open) {
+            controls_menu.draw(window, *font, gui);
         }
         window.display();
     }

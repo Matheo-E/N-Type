@@ -32,6 +32,7 @@ const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
 const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
 const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
+const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
 const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
 
 bool load_ui_font(sf::Font& font) {
@@ -209,6 +210,9 @@ GameExitAction ClientApp::run() {
 void ClientApp::poll_events() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
+        if (controls_menu_.open && controls_menu_.handle_event(window_, event)) {
+            continue;
+        }
         if (event.type == sf::Event::Closed) {
             exit_action_ = GameExitAction::Quit;
             session_active_ = false;
@@ -229,6 +233,9 @@ void ClientApp::poll_events() {
             if (kMenuButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = !pause_menu_open_;
+            } else if (pause_menu_open_ && kControlsButton.contains(point)) {
+                UiClickSound::instance().play();
+                controls_menu_.open = true;
             } else if (pause_menu_open_ && kContinueButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = false;
@@ -369,7 +376,7 @@ void ClientApp::draw_pause_menu() {
                               static_cast<float>(config::kHeight)});
     shade.setFillColor(sf::Color(5, 8, 30, 185));
     window_.draw(shade);
-    pause_gui_.panel(window_, ui_font_, "Pause", {320.f, 125.f, 640.f, 470.f});
+    pause_gui_.panel(window_, ui_font_, "Pause", {320.f, 125.f, 640.f, 515.f});
     pause_gui_.button(window_, ui_font_, kContinueButton, "Continuer", mouse, pressed, true, 1, 32);
     pause_gui_.button(window_, ui_font_, kRestartButton, "Recommencer", mouse, pressed, true, 0, 32);
     pause_gui_.button(window_, ui_font_, kLobbyButton, "Lobby", mouse, pressed, true, 2, 24);
@@ -380,6 +387,10 @@ void ClientApp::draw_pause_menu() {
     pause_gui_.button(window_, ui_font_, kClickSoundButton,
                       sound_enabled ? "Son : ON" : "Son : OFF", mouse, pressed,
                       true, sound_enabled ? 1 : 2, 20);
+    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 24);
+    if (controls_menu_.open) {
+        controls_menu_.draw(window_, ui_font_, pause_gui_);
+    }
 }
 
 void ClientApp::render() {

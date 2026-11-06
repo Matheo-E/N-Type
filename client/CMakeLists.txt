@@ -1,6 +1,7 @@
 add_executable(r-type_client
     src/main.cpp
     src/Launcher.cpp
+    src/ControlsMenu.cpp
     src/ClientApp.cpp
     src/ClientNetwork.cpp
 )
