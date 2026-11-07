@@ -88,6 +88,10 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     AddEnemyPatterns(world, id, data, pos);
     AddSprite(world, id, Look(data.TextureId, data.Source, data.Scale), ZEnemy);
     AddHurtbox(world, id, data.Radius, {0.0f, 0.0f});
+    if (data.ContactDamage > 0) {  // touching it hurts the player (its layer mask already targets the player)
+        AddHitbox(world, id, data.Radius);
+        world.Damages[id].Dmg = data.ContactDamage;
+    }
     SetLayer(world, id, LayerEnemy, LayerPlayer);
     return id;
 }

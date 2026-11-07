@@ -47,6 +47,7 @@ EnemyData ReadEnemy(const nlohmann::json& item) {
     EnemyData data;
     data.Name = item.value("name", data.Name);
     data.Hp = item.value("hp", data.Hp);
+    data.ContactDamage = item.value("contact_damage", data.ContactDamage);
     data.Radius = item.value("radius", data.Radius);
     data.Speed = item.value("speed", data.Speed);
     data.FireInterval = item.value("fire_interval", data.FireInterval);
