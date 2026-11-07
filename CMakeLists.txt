@@ -33,6 +33,7 @@ add_library(ntype_engine STATIC
     engine/src/Combat.cpp
     engine/src/Factory.cpp
     engine/src/Input.cpp
+    engine/src/Items.cpp
     engine/src/Loader.cpp
     engine/src/System.cpp
 )
@@ -47,6 +48,13 @@ if(NTYPE_BUILD_CLIENT)
     add_subdirectory(client)
 endif()
 add_subdirectory(server)
+
+# Engine sandbox: the engine alone in one window, no network (sandbox/main.cpp).
+if(NTYPE_BUILD_CLIENT)
+    add_executable(ntype_sandbox sandbox/main.cpp)
+    target_link_libraries(ntype_sandbox PRIVATE ntype_engine)
+    target_compile_definitions(ntype_sandbox PRIVATE NTYPE_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
+endif()
 
 enable_testing()
 add_executable(protocol_test tests/protocol/protocol_test.cpp)

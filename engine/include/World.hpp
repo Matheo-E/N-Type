@@ -4,6 +4,7 @@
 
 #include "Component.hpp"
 #include "EnemyData.hpp"
+#include "ItemData.hpp"
 #include "Input.hpp"
 #include "PatternData.hpp"
 #include "AllTextures.hpp"
@@ -18,6 +19,7 @@ public:
 
     // Loaded definitions (not per-entity, so not touched by Destroy).
     std::unordered_map<int, EnemyData> EnemyTypes;
+    std::unordered_map<int, ItemData> ItemTypes;
     std::unordered_map<int, AttackPattern> AttackPatterns;
     std::unordered_map<int, FlightPattern> FlightPatterns;
     std::unordered_map<int, AllTexture> Textures;
@@ -51,6 +53,7 @@ public:
     std::unordered_map<int, EPlayer> Players;
     std::unordered_map<int, EEnemy> Enemies;
     std::unordered_map<int, EBullet> Bullets;
+    std::unordered_map<int, EPickup> Pickups;
 
     // Combat
     std::unordered_map<int, EHealth> Healths;
@@ -92,6 +95,7 @@ public:
         Players.erase(id);
         Enemies.erase(id);
         Bullets.erase(id);
+        Pickups.erase(id);
 
         Healths.erase(id);
         Damages.erase(id);

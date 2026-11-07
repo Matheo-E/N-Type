@@ -8,6 +8,7 @@
 namespace {
 
 constexpr float CullMargin = 64.0f;  // how far outside the window things survive
+constexpr float FollowGap = 40.0f;   // followers stop this far from what they follow
 
 float SpeedOf(World& world, int id) {
     auto speed = world.Speeds.find(id);
@@ -134,6 +135,30 @@ void Flight(World& world, float dt, int playerid) {
     }
 }
 
+// Each entity with an EParent heads for its parent at its own speed (ESpeed) and stops
+// FollowGap pixels away from it, without overshooting. A chain of followers (each one
+// following the one in front) makes a centipede. If the parent is gone, it stops.
+void Follow(World& world, float dt) {
+    for (auto& [id, parent] : world.Parents) {
+        auto pos = world.Positions.find(id);
+        auto vel = world.Velocities.find(id);
+        if (pos == world.Positions.end() || vel == world.Velocities.end()) {
+            continue;
+        }
+        vel->second.Xy = {0.0f, 0.0f};
+        auto target = world.Positions.find(parent.ParentId);
+        if (target == world.Positions.end() || dt <= 0.0f) {
+            continue;
+        }
+        const sf::Vector2f delta = target->second.Xy - pos->second.Xy;
+        const float distance = Length(delta);
+        if (distance > FollowGap) {
+            const float speed = std::min(SpeedOf(world, id), (distance - FollowGap) / dt);
+            vel->second.Xy = delta / distance * speed;
+        }
+    }
+}
+
 // Each spawner counts up; when it reaches its interval it fires its attack pattern.
 // The player's spawner only fires while the Shoot action is held (and is kept ready,
 // so the first shot is immediate). Bullets are created after the loop, because creating
@@ -181,11 +206,11 @@ void Timers(World& world, float dt) {
     }
 }
 
-// Removes bullets and enemies that are far outside the window, so they do not pile up.
+// Removes bullets, enemies and items that are far outside the window, so they do not pile up.
 void Cull(World& world) {
     std::vector<int> gone;
     for (auto& [id, pos] : world.Positions) {
-        if (world.Bullets.count(id) == 0 && world.Enemies.count(id) == 0) {
+        if (world.Bullets.count(id) == 0 && world.Enemies.count(id) == 0 && world.Pickups.count(id) == 0) {
             continue;
         }
         const sf::Vector2f p = pos.Xy;

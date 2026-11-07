@@ -148,6 +148,12 @@ public:
     int OId = -1;  // the entity that created this one (a bullet's shooter)
 };
 
+// An item lying on the map. ItemId is its type in world.ItemTypes (items.json).
+class EPickup {
+public:
+    int ItemId = -1;
+};
+
 class EPlayer {};
 class EEnemy {};
 class EBullet {};

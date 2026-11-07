@@ -11,6 +11,10 @@
 // Enemy types -> world.EnemyTypes.
 bool LoadEnemies(World& world, const std::string& path);
 
+// Item types -> world.ItemTypes. See ItemData.hpp for the keys; "effects" holds what the
+// item does: heal, max_hp, speed, fire_interval, shooting_type, invincibility, attack, defense.
+bool LoadItems(World& world, const std::string& path);
+
 // Attack patterns -> world.AttackPatterns.
 bool LoadAttackPatterns(World& world, const std::string& path);
 
@@ -24,7 +28,7 @@ bool LoadFlightPatterns(World& world, const std::string& path);
 bool LoadTextures(World& world, const std::string& assetsdir);
 
 // Call after everything is loaded. Checks that the ids the data refers to exist: the
-// patterns and textures named by enemies, and the textures and flight patterns named by
-// attack patterns.
+// patterns and textures named by enemies and items, the shooting type named by items, and
+// the textures and flight patterns named by attack patterns.
 // Prints every problem and returns false if there was any.
 bool CheckReferences(const World& world);

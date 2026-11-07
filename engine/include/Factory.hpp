@@ -13,3 +13,5 @@ int CreateEBullet(World& world, int spawnerid);
 // the parent's past positions) is a system's job: functions take at most 4 parameters.
 int CreateEEnemyFollower(World& world, sf::Vector2f pos, int enemyid, int parentid);
 int CreateEStatic(World& world, sf::Vector2f pos);
+// An item lying on the map, built from world.ItemTypes. Returns -1 if itemid is unknown.
+int CreateEItem(World& world, sf::Vector2f pos, int itemid);

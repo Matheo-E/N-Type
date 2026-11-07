@@ -24,8 +24,10 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
     MoveInput(world, playerid);
     Spawner(world, dt, playerid);  // before Flight, so new bullets start on their flight pattern
     Flight(world, dt, playerid);
+    Follow(world, dt);  // after Flight: a follower ignores any flight pattern it has
     Movement(world, dt);
     Collision(world);
+    Pickup(world);
     Timers(world, dt);
     Cull(world);
     Animate(world, dt);

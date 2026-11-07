@@ -1,5 +1,6 @@
 #include "../include/System.hpp"
 
+#include <algorithm>
 #include <vector>
 
 namespace {
@@ -33,7 +34,12 @@ void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
         return;
     }
     auto damage = world.Damages.find(hitid);
-    health->second.Hp -= damage != world.Damages.end() ? damage->second.Dmg : 0;
+    int amount = damage != world.Damages.end() ? damage->second.Dmg : 0;
+    auto stats = world.Stats.find(hurtid);
+    if (amount > 0 && stats != world.Stats.end()) {  // Defense softens a hit, but a hit always hurts
+        amount = std::max(amount - stats->second.Defense, 1);
+    }
+    health->second.Hp -= amount;
     if (health->second.Hp <= 0) {
         dead.push_back(hurtid);
     } else if (world.Players.count(hurtid) > 0) {

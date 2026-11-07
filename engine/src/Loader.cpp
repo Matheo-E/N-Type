@@ -42,6 +42,20 @@ void ReadSprite(const nlohmann::json& sprite, int& texture, sf::IntRect& source,
     }
 }
 
+// A full sprite block, shared by enemies and items:
+// { "texture": 2, "rect": [x, y, w, h], "scale": 1, "flip_x": true,
+//   "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } }
+template <class Data>
+void ReadLook(const nlohmann::json& sprite, Data& data) {
+    ReadSprite(sprite, data.TextureId, data.Source, data.Scale);
+    data.FlipX = sprite.value("flip_x", data.FlipX);
+    if (sprite.contains("animation")) {
+        const nlohmann::json& animation = sprite.at("animation");
+        data.AnimationFrames = animation.at("frames").get<std::vector<int>>();
+        data.AnimationFrameTime = animation.value("frame_time", data.AnimationFrameTime);
+    }
+}
+
 // Keys other than "id" are optional: a missing one keeps the default.
 EnemyData ReadEnemy(const nlohmann::json& item) {
     EnemyData data;
@@ -54,14 +68,32 @@ EnemyData ReadEnemy(const nlohmann::json& item) {
     data.AttackPatternId = item.value("attack_pattern", data.AttackPatternId);
     data.FlightPatternId = item.value("flight_pattern", data.FlightPatternId);
     if (item.contains("sprite")) {
-        const nlohmann::json& sprite = item.at("sprite");
-        ReadSprite(sprite, data.TextureId, data.Source, data.Scale);
-        data.FlipX = sprite.value("flip_x", data.FlipX);
-        if (sprite.contains("animation")) {  // { "frames": [0, 1, 2, 1], "frame_time": 0.125 }
-            const nlohmann::json& animation = sprite.at("animation");
-            data.AnimationFrames = animation.at("frames").get<std::vector<int>>();
-            data.AnimationFrameTime = animation.value("frame_time", data.AnimationFrameTime);
-        }
+        ReadLook(item.at("sprite"), data);
+    }
+    return data;
+}
+
+// Keys other than "id" are optional. "effects" lists what the item does when picked up.
+ItemData ReadItem(const nlohmann::json& item) {
+    ItemData data;
+    data.Name = item.value("name", data.Name);
+    data.Radius = item.value("radius", data.Radius);
+    data.FlightPatternId = item.value("flight_pattern", data.FlightPatternId);
+    data.Speed = item.value("speed", data.Speed);
+    data.Lifetime = item.value("lifetime", data.Lifetime);
+    if (item.contains("sprite")) {
+        ReadLook(item.at("sprite"), data);
+    }
+    if (item.contains("effects")) {
+        const nlohmann::json& effects = item.at("effects");
+        data.Heal = effects.value("heal", data.Heal);
+        data.MaxHp = effects.value("max_hp", data.MaxHp);
+        data.SpeedBonus = effects.value("speed", data.SpeedBonus);
+        data.FireInterval = effects.value("fire_interval", data.FireInterval);
+        data.ShootingType = effects.value("shooting_type", data.ShootingType);
+        data.Invincibility = effects.value("invincibility", data.Invincibility);
+        data.Attack = effects.value("attack", data.Attack);
+        data.Defense = effects.value("defense", data.Defense);
     }
     return data;
 }
@@ -188,6 +220,13 @@ bool LoadEnemies(World& world, const std::string& path) {
     });
 }
 
+bool LoadItems(World& world, const std::string& path) {
+    return ReadList(path, "items", [&world](const nlohmann::json& item) {
+        world.ItemTypes[item.at("id").get<int>()] = ReadItem(item);
+        return true;
+    });
+}
+
 bool LoadAttackPatterns(World& world, const std::string& path) {
     return ReadList(path, "attack_patterns", [&world](const nlohmann::json& item) {
         world.AttackPatterns[item.at("id").get<int>()] = ReadAttack(item);
@@ -229,6 +268,18 @@ bool CheckReferences(const World& world) {
         }
         if (enemy.TextureId >= 0 && world.Textures.count(enemy.TextureId) == 0) {
             missing(who, "texture", enemy.TextureId);
+        }
+    }
+    for (const auto& [id, data] : world.ItemTypes) {
+        const std::string who = "item " + std::to_string(id) + " (" + data.Name + ")";
+        if (data.TextureId >= 0 && world.Textures.count(data.TextureId) == 0) {
+            missing(who, "texture", data.TextureId);
+        }
+        if (data.FlightPatternId >= 0 && world.FlightPatterns.count(data.FlightPatternId) == 0) {
+            missing(who, "flight pattern", data.FlightPatternId);
+        }
+        if (data.ShootingType >= 0 && world.AttackPatterns.count(data.ShootingType) == 0) {
+            missing(who, "attack pattern (shooting_type)", data.ShootingType);
         }
     }
     for (const auto& [id, pattern] : world.AttackPatterns) {

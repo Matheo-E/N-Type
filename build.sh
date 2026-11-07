@@ -68,7 +68,7 @@ if [[ $clean == 1 ]]; then
 fi
 cmake --preset "$preset"
 cmake --build --preset "$preset"
-for binary in r-type_client r-type_server; do
+for binary in r-type_client r-type_server ntype_sandbox; do
     cp "build/client-$preset/bin/$binary" "./$binary"
 done
-echo "Run ./r-type_server, then ./r-type_client"
+echo "Run ./r-type_server, then ./r-type_client (or ./ntype_sandbox to try the engine alone)"

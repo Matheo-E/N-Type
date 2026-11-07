@@ -5,7 +5,7 @@
       "name": "player_shot",
       "count": 1,
       "spread": 0,
-      "angle": 180,
+      "angle": 90,
       "speed": 600,
       "damage": 1,
       "radius": 4,

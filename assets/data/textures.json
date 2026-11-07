@@ -18,6 +18,7 @@
     { "id": 16, "path": "sprites/enemies/level_03_dentist_lab/toxic_blob.png" },
     { "id": 17, "path": "sprites/enemies/level_03_dentist_lab/evil_dentures.png" },
     { "id": 18, "path": "sprites/enemies/level_03_dentist_lab/infected_tooth.png" },
-    { "id": 19, "path": "sprites/enemies/level_03_dentist_lab/infected_tooth_projectile.png" }
+    { "id": 19, "path": "sprites/enemies/level_03_dentist_lab/infected_tooth_projectile.png" },
+    { "id": 20, "path": "sprites/items/2_nuzz_item.png" }
   ]
 }
