@@ -5,6 +5,7 @@
 #include "Component.hpp"
 #include "EnemyData.hpp"
 #include "Input.hpp"
+#include "PatternData.hpp"
 #include "AllTextures.hpp"
 
 // One map per component type, keyed by entity id.
@@ -17,6 +18,8 @@ public:
 
     // Loaded definitions (not per-entity, so not touched by Destroy).
     std::unordered_map<int, EnemyData> EnemyTypes;
+    std::unordered_map<int, AttackPattern> AttackPatterns;
+    std::unordered_map<int, FlightPattern> FlightPatterns;
     std::unordered_map<int, AllTexture> Textures;
 
     // Space

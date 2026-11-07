@@ -6,7 +6,7 @@
 #include <vector>
 
 void CreateGame(sf::RenderWindow& window, sf::String name) {
-    window.create(sf::VideoMode(800, 600), name);
+    window.create(sf::VideoMode(WindowWidth, WindowHeight), name);
     window.setFramerateLimit(60);
     window.setKeyRepeatEnabled(false);
 }
@@ -18,10 +18,16 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
             window.close();
         }
     }
+    dt = std::min(dt, 0.05f);  // a long stall (dragging the window) must not teleport things
     window.clear(sf::Color::Black);
     world.Actions.Update(world.Keys);
     MoveInput(world, playerid);
+    Spawner(world, dt, playerid);  // before Flight, so new bullets start on their flight pattern
+    Flight(world, dt, playerid);
     Movement(world, dt);
+    Collision(world);
+    Timers(world, dt);
+    Cull(world);
     Draw(world, window);
     window.display();
 }

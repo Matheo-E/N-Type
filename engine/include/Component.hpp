@@ -43,6 +43,9 @@ public:
     int PatternId = -1;
     float Time = 0;                  // seconds since the pattern started
     sf::Vector2f Origin = {0, 0};    // where it started; patterns move relative to it
+    float Heading = 0;               // degrees the pattern is turned by. A bullet's heading is
+                                     // the angle it was fired at, so the same pattern works for
+                                     // every bullet of a fan. 0 for enemies
 };
 
 // ---- Collision ------------------------------------------------------------

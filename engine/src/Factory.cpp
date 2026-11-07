@@ -1,10 +1,10 @@
 #include "../include/Factory.hpp"
+#include "../include/Math.hpp"
 
 namespace {
 
-// Texture ids from assets/data/textures.json.
+// Texture id from assets/data/textures.json.
 constexpr int TexturePlayers = 1;
-constexpr int TextureShots = 4;
 
 ESprite Look(int textureid, sf::IntRect source, float scale) {
     ESprite look;
@@ -61,6 +61,8 @@ int CreateEPlayer(World& world, sf::Vector2f pos) {
     world.Speeds[id].Value = 200.0f;
     world.Healths[id].Hp = 3;
     world.Healths[id].MaxHp = 3;
+    world.Spawners[id].Interval = 0.15f;  // its attack pattern 0 is the player's shot
+    world.Spawners[id].PatternId = 0;
     AddSprite(world, id, Look(TexturePlayers, {67, 2, 32, 15}, 2.0f), ZPlayer);
     // Bullet hell: the part that can be hit is much smaller than the sprite.
     AddHurtbox(world, id, 3.0f, {0.0f, 0.0f});
@@ -90,22 +92,41 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     return id;
 }
 
-// One bullet, fired by spawnerid. It starts at the spawner and gets a default
-// velocity: the pattern system overrides it with the bullet's real direction.
+// One bullet, fired by spawnerid. Everything about the bullet (speed, damage, size,
+// lifetime, look) comes from the attack pattern stored in the spawner. It starts at the
+// spawner and flies along the pattern's angle: a system that fires a fan or a ring
+// overrides the velocity for each bullet. Returns -1 (nothing is created) if the
+// spawner has no attack pattern, or the pattern is unknown.
 int CreateEBullet(World& world, int spawnerid) {
+    auto spawner = world.Spawners.find(spawnerid);
+    if (spawner == world.Spawners.end()) {
+        return -1;
+    }
+    auto found = world.AttackPatterns.find(spawner->second.PatternId);
+    if (found == world.AttackPatterns.end()) {
+        return -1;
+    }
+    const AttackPattern& pattern = found->second;
     const bool fromplayer = world.Players.count(spawnerid) > 0;
-    auto spawner = world.Positions.find(spawnerid);
+    auto where = world.Positions.find(spawnerid);
     int id = CreateE(world);
 
     world.Bullets.emplace(id, EBullet{});
-    world.Positions[id].Xy = (spawner != world.Positions.end()) ? spawner->second.Xy : sf::Vector2f(0, 0);
-    world.Velocities[id].Xy = fromplayer ? sf::Vector2f(0, -600) : sf::Vector2f(0, 150);
+    world.Positions[id].Xy = where != world.Positions.end() ? where->second.Xy : sf::Vector2f(0, 0);
+    world.Velocities[id].Xy = Direction(pattern.AngleDegrees) * pattern.Speed;
     world.OwnerIds[id].OId = spawnerid;
-    world.Damages[id].Dmg = 1;
-    world.Lifetimes[id].Lifetime = 10.0f;
-    const sf::IntRect cell = fromplayer ? sf::IntRect(249, 103, 16, 12) : sf::IntRect(243, 276, 12, 12);
-    AddSprite(world, id, Look(TextureShots, cell, 2.0f), ZBullet);
-    AddHitbox(world, id, 4.0f);
+    world.Damages[id].Dmg = pattern.Damage;
+    world.Lifetimes[id].Lifetime = pattern.Lifetime;
+    if (pattern.FlightPatternId >= 0) {  // the bullet follows a flight pattern, turned to its own angle
+        world.Speeds[id].Value = pattern.Speed;
+        world.Flights[id].PatternId = pattern.FlightPatternId;
+        world.Flights[id].Origin = world.Positions[id].Xy;
+        world.Flights[id].Heading = pattern.AngleDegrees;
+    }
+    if (pattern.TextureId >= 0) {
+        AddSprite(world, id, Look(pattern.TextureId, pattern.Source, pattern.Scale), ZBullet);
+    }
+    AddHitbox(world, id, pattern.Radius);
     SetLayer(world, id, fromplayer ? LayerPlayerBullet : LayerEnemyBullet,
              fromplayer ? LayerEnemy : LayerPlayer);
     return id;

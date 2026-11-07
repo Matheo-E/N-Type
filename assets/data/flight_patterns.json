@@ -1,0 +1,29 @@
+{
+  "flight_patterns": [
+    { "id": 1, "name": "weave", "type": "sine", "direction": 0, "forward": 1, "amplitude": 120, "frequency": 0.32 },
+    { "id": 2, "name": "sweep", "type": "sine", "direction": 0, "forward": 0, "amplitude": 120, "frequency": 0.16 },
+    { "id": 3, "name": "chase", "type": "chase", "forward": 1 },
+    { "id": 4, "name": "advance_left", "type": "straight", "direction": -90, "forward": 1 },
+    { "id": 5, "name": "vertical_patrol", "type": "sine", "direction": -90, "forward": 0, "amplitude": 120, "frequency": 0.2 },
+    {
+      "id": 6,
+      "name": "arc_and_loop",
+      "type": "path",
+      "steps": [
+        { "curve": [[0, 250], [200, 340], [320, 340]], "duration": 2.5 },
+        { "arc": { "radius": 70, "start": 180, "sweep": 360 }, "duration": 3 },
+        { "move": [-500, 340], "duration": 3 }
+      ]
+    },
+    { "id": 7, "name": "wave", "type": "sine", "direction": 0, "forward": 1, "amplitude": 80, "frequency": 1.0 },
+    {
+      "id": 8,
+      "name": "s_curve",
+      "type": "path",
+      "steps": [
+        { "curve": [[60, 100], [-60, 200], [0, 300]], "duration": 1.5 },
+        { "move": [0, 700], "duration": 3 }
+      ]
+    }
+  ]
+}

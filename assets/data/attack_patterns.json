@@ -1,0 +1,103 @@
+{
+  "attack_patterns": [
+    {
+      "id": 0,
+      "name": "player_shot",
+      "count": 1,
+      "spread": 0,
+      "angle": 180,
+      "speed": 600,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 10,
+      "sprite": { "texture": 4, "rect": [249, 103, 16, 12], "scale": 2 }
+    },
+    {
+      "id": 1,
+      "name": "fan_of_three",
+      "count": 3,
+      "spread": 40,
+      "angle": 0,
+      "speed": 200,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 10,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 2,
+      "name": "ring_of_sixteen",
+      "count": 16,
+      "spread": 360,
+      "angle": 0,
+      "speed": 150,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 10,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 3,
+      "name": "aimed_shot",
+      "count": 1,
+      "spread": 0,
+      "aimed": true,
+      "speed": 250,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 8,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 4,
+      "name": "aimed_fan",
+      "count": 3,
+      "spread": 36,
+      "aimed": true,
+      "speed": 230,
+      "damage": 2,
+      "radius": 6,
+      "lifetime": 8,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 5,
+      "name": "wavy_fan",
+      "count": 5,
+      "spread": 60,
+      "angle": 0,
+      "speed": 160,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 8,
+      "flight_pattern": 7,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 6,
+      "name": "homing_shot",
+      "count": 1,
+      "spread": 0,
+      "aimed": true,
+      "speed": 110,
+      "damage": 1,
+      "radius": 5,
+      "lifetime": 7,
+      "flight_pattern": 3,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    },
+    {
+      "id": 7,
+      "name": "curve_shot",
+      "count": 1,
+      "spread": 0,
+      "aimed": true,
+      "speed": 200,
+      "damage": 1,
+      "radius": 4,
+      "lifetime": 6,
+      "flight_pattern": 8,
+      "sprite": { "texture": 4, "rect": [243, 276, 12, 12], "scale": 2 }
+    }
+  ]
+}

@@ -11,6 +11,8 @@ add_executable(ntype
   src/main.cpp
   engine/src/System.cpp
   engine/src/Input.cpp
+  engine/src/Behaviour.cpp
+  engine/src/Combat.cpp
   engine/src/Factory.cpp
   engine/src/Loader.cpp)
 target_link_libraries(ntype PRIVATE sfml-graphics sfml-window sfml-system nlohmann_json::nlohmann_json)

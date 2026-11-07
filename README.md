@@ -9,7 +9,7 @@ cmake --build build
 ./build/ntype
 ```
 
-Move the ship with Z, Q, S, D. Two enemy types are loaded from
+Move the ship with Z, Q, S, D and shoot with Space. Two enemy types are loaded from
 `assets/data/enemies.json` and stand still for now.
 
 - **Components** (`engine/include/Component.hpp`): plain data.
