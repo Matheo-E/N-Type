@@ -16,6 +16,10 @@ add_executable(r-type_client
     src/ResultsScreen.cpp
 )
 target_link_libraries(r-type_client PRIVATE ntype_client_core)
+# ClientApp calls glViewport directly. SFML's shared Windows libraries do not pass
+# their OpenGL dependency on to us, so link it explicitly.
+find_package(OpenGL REQUIRED)
+target_link_libraries(r-type_client PRIVATE OpenGL::GL)
 if(MSVC)
     # The Windows vcpkg triplet provides SFML as shared libraries, so its
     # private OpenAL dependency is not exported to consumers.
