@@ -2,18 +2,22 @@
 
 namespace {
 
-// Circles are positioned by their centre, so the position matches the hitbox.
-void AddCircle(World& world, int id, float radius, sf::Color color) {
-    sf::CircleShape& circle = world.Circles[id].Circle;
-    circle.setRadius(radius);
-    circle.setOrigin(radius, radius);
-    circle.setFillColor(color);
+// Texture ids from assets/data/textures.json.
+constexpr int TexturePlayers = 1;
+constexpr int TextureShots = 4;
+
+ESprite Look(int textureid, sf::IntRect source, float scale) {
+    ESprite look;
+    look.TextureId = textureid;
+    look.Source = source;
+    look.Scale = {scale, scale};
+    return look;
 }
 
-void AddRectangle(World& world, int id, float length, float height, sf::Color color) {
-    sf::RectangleShape& rectangle = world.Rectangles[id].Rect;
-    rectangle.setSize({length, height});
-    rectangle.setFillColor(color);
+// Makes the entity visible, on the given draw layer (Z, see Component.hpp).
+void AddSprite(World& world, int id, const ESprite& look, int z) {
+    world.Sprites[id] = look;
+    world.ZIndexes[id].Z = z;
 }
 
 void AddHurtbox(World& world, int id, float radius, sf::Vector2f offset) {
@@ -42,17 +46,6 @@ void AddEnemyPatterns(World& world, int id, const EnemyData& data, sf::Vector2f 
     }
 }
 
-// A sprite if the enemy type has a texture, otherwise a plain circle.
-void AddEnemyLook(World& world, int id, const EnemyData& data) {
-    if (data.TextureId < 0) {
-        AddCircle(world, id, data.Radius, data.Color);
-        return;
-    }
-    world.TextureIds[id].TextId = data.TextureId;
-    world.TextureIds[id].Source = data.Source;
-    world.TextureIds[id].Scale = {data.Scale, data.Scale};
-}
-
 }  // namespace
 
 int CreateE(World& world) {
@@ -68,11 +61,9 @@ int CreateEPlayer(World& world, sf::Vector2f pos) {
     world.Speeds[id].Value = 200.0f;
     world.Healths[id].Hp = 3;
     world.Healths[id].MaxHp = 3;
-    world.Spawners[id].Interval = 0.15f;  // pattern 0: fires straight up while Space is held
-    world.Spawners[id].PatternId = 0;
-    AddRectangle(world, id, 32.0f, 32.0f, sf::Color::Green);
+    AddSprite(world, id, Look(TexturePlayers, {67, 2, 32, 15}, 2.0f), ZPlayer);
     // Bullet hell: the part that can be hit is much smaller than the sprite.
-    AddHurtbox(world, id, 3.0f, {16.0f, 16.0f});
+    AddHurtbox(world, id, 3.0f, {0.0f, 0.0f});
     SetLayer(world, id, LayerPlayer, 0);
     return id;
 }
@@ -93,7 +84,7 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     world.Healths[id].Hp = data.Hp;
     world.Healths[id].MaxHp = data.Hp;
     AddEnemyPatterns(world, id, data, pos);
-    AddEnemyLook(world, id, data);
+    AddSprite(world, id, Look(data.TextureId, data.Source, data.Scale), ZEnemy);
     AddHurtbox(world, id, data.Radius, {0.0f, 0.0f});
     SetLayer(world, id, LayerEnemy, LayerPlayer);
     return id;
@@ -112,7 +103,8 @@ int CreateEBullet(World& world, int spawnerid) {
     world.OwnerIds[id].OId = spawnerid;
     world.Damages[id].Dmg = 1;
     world.Lifetimes[id].Lifetime = 10.0f;
-    AddCircle(world, id, 4.0f, sf::Color::White);
+    const sf::IntRect cell = fromplayer ? sf::IntRect(249, 103, 16, 12) : sf::IntRect(243, 276, 12, 12);
+    AddSprite(world, id, Look(TextureShots, cell, 2.0f), ZBullet);
     AddHitbox(world, id, 4.0f);
     SetLayer(world, id, fromplayer ? LayerPlayerBullet : LayerEnemyBullet,
              fromplayer ? LayerEnemy : LayerPlayer);

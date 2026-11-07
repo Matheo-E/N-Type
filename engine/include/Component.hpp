@@ -79,27 +79,13 @@ class ESolid {};
 
 // ---- Drawing --------------------------------------------------------------
 
-class ERectangle {
+// What an entity looks like: part of a shared texture (a sprite sheet cell).
+// Only entities with an ESprite are drawn. TextureId is the id from
+// textures.json; -1 means no image. The image itself lives in World::Textures.
+class ESprite {
 public:
-    sf::RectangleShape Rect;
-};
-
-class ECircle {
-public:
-    sf::CircleShape Circle;
-};
-
-class EConvex {
-public:
-    sf::ConvexShape Convex;
-};
-
-// Part of a texture (a sprite sheet cell). The texture itself lives in one
-// shared place, and TextId is its handle.
-class ETextureId {
-public:
-    int TextId = 0;
-    sf::IntRect Source;
+    int TextureId = -1;
+    sf::IntRect Source;  // the cell of the image to show; empty means the whole image
     sf::Vector2f Scale = {1, 1};
 };
 
@@ -111,6 +97,15 @@ public:
     float Timer = 0;
     sf::Vector2i FrameSize = {0, 0};  // size of one cell in the sheet
 };
+
+// Draw order: the entity with the higher Z is painted on top. No EZIndex counts as 0.
+// The layers used by the game (see docs/DRAW_LAYERS.md):
+inline constexpr int ZBackground = -10;
+inline constexpr int ZEnemy = 0;
+inline constexpr int ZBullet = 1;
+inline constexpr int ZPlayer = 2;
+inline constexpr int ZEffect = 3;
+inline constexpr int ZUi = 10;
 
 class EZIndex {
 public:

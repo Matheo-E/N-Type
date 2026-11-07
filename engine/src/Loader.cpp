@@ -8,13 +8,9 @@
 
 namespace {
 
-// Keys other than "id" are optional: a missing one keeps the default.
-void ReadSprite(World& world, const std::string& assetsdir, const nlohmann::json& sprite, EnemyData& data) {
-    const std::string file = sprite.value("texture", "");
-    if (file.empty()) {
-        return;
-    }
-    data.TextureId = LoadTexture(world, assetsdir + "/" + file);
+// "sprite": { "texture": <id in textures.json>, "rect": [x, y, w, h], "scale": n }
+void ReadSprite(const nlohmann::json& sprite, EnemyData& data) {
+    data.TextureId = sprite.value("texture", data.TextureId);
     data.Scale = sprite.value("scale", data.Scale);
     const std::vector<int> rect = sprite.value("rect", std::vector<int>{});
     if (rect.size() >= 4) {
@@ -22,7 +18,8 @@ void ReadSprite(World& world, const std::string& assetsdir, const nlohmann::json
     }
 }
 
-EnemyData ReadEnemy(World& world, const std::string& assetsdir, const nlohmann::json& item) {
+// Keys other than "id" are optional: a missing one keeps the default.
+EnemyData ReadEnemy(const nlohmann::json& item) {
     EnemyData data;
     data.Name = item.value("name", data.Name);
     data.Hp = item.value("hp", data.Hp);
@@ -32,36 +29,31 @@ EnemyData ReadEnemy(World& world, const std::string& assetsdir, const nlohmann::
     data.AttackPatternId = item.value("attack_pattern", data.AttackPatternId);
     data.FlightPatternId = item.value("flight_pattern", data.FlightPatternId);
 
-    const std::vector<int> color = item.value("color", std::vector<int>{});
-    if (color.size() >= 3) {
-        data.Color = sf::Color(color[0], color[1], color[2]);
-    }
     if (item.contains("sprite")) {
-        ReadSprite(world, assetsdir, item.at("sprite"), data);
+        ReadSprite(item.at("sprite"), data);
     }
     return data;
 }
 
-}  // namespace
+// Loads one entry of textures.json into world.Textures. Throws on a missing or
+// mistyped key; returns false if the image itself cannot be loaded.
+bool ReadTexture(World& world, const std::string& assetsdir, const nlohmann::json& item) {
+    const int id = item.at("id").get<int>();
+    const std::string path = item.at("path").get<std::string>();
 
-int LoadTexture(World& world, const std::string& path) {
-    auto known = world.TexturePaths.find(path);
-    if (known != world.TexturePaths.end()) {
-        return known->second;
+    AllTexture& entry = world.Textures[id];
+    entry.Path = assetsdir + "/" + path;
+    if (!entry.Image.loadFromFile(entry.Path)) {
+        std::cerr << "cannot load texture " << entry.Path << "\n";
+        world.Textures.erase(id);
+        return false;
     }
-    sf::Texture texture;
-    if (!texture.loadFromFile(path)) {
-        std::cerr << "cannot load texture " << path << "\n";
-        return -1;
-    }
-    int id = world.NextTextureId++;
-    world.Textures[id] = texture;
-    world.TexturePaths[path] = id;
-    return id;
+    return true;
 }
 
-bool LoadEnemies(World& world, const std::string& assetsdir) {
-    const std::string path = assetsdir + "/data/enemies.json";
+}  // namespace
+
+bool LoadEnemies(World& world, const std::string& path) {
     std::ifstream file(path);
     if (!file) {
         std::cerr << "cannot open " << path << "\n";
@@ -70,7 +62,28 @@ bool LoadEnemies(World& world, const std::string& assetsdir) {
     try {
         const nlohmann::json root = nlohmann::json::parse(file);
         for (const auto& item : root.at("enemies")) {
-            world.EnemyTypes[item.at("id").get<int>()] = ReadEnemy(world, assetsdir, item);
+            world.EnemyTypes[item.at("id").get<int>()] = ReadEnemy(item);
+        }
+    } catch (const nlohmann::json::exception& error) {
+        std::cerr << path << ": " << error.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool LoadTextures(World& world, const std::string& assetsdir) {
+    const std::string path = assetsdir + "/data/textures.json";
+    std::ifstream file(path);
+    if (!file) {
+        std::cerr << "cannot open " << path << "\n";
+        return false;
+    }
+    try {
+        const nlohmann::json root = nlohmann::json::parse(file);
+        for (const auto& item : root.at("textures")) {
+            if (!ReadTexture(world, assetsdir, item)) {
+                return false;
+            }
         }
     } catch (const nlohmann::json::exception& error) {
         std::cerr << path << ": " << error.what() << "\n";

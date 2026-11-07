@@ -9,9 +9,11 @@ cmake --build build
 ./build/ntype
 ```
 
-Move the green square with Z, Q, S, D and shoot with Space. Two enemy types,
-loaded from `assets/data/enemies.json`, fly and fire patterns of bullets.
+Move the ship with Z, Q, S, D. Two enemy types are loaded from
+`assets/data/enemies.json` and stand still for now.
 
-**New here? Read [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md).** It explains the
-ECS idea, every file, the enemy data format, the conventions, and how to add
-components, systems, factories and enemies.
+- **Components** (`engine/include/Component.hpp`): plain data.
+- **World** (`engine/include/World.hpp`): one map per component type, keyed by entity id.
+- **Systems** (`engine/src/System.cpp`): functions over the world.
+- **Factory** (`engine/src/Factory.cpp`): functions that build entities.
+- **Loader** (`engine/src/Loader.cpp`): reads the enemy types from JSON.

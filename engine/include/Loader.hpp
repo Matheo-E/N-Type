@@ -4,11 +4,12 @@
 
 #include <string>
 
-// Loads an image once and returns its texture id. Asking again for the same path
-// returns the same id. Returns -1 (and prints why) if the file cannot be loaded.
-int LoadTexture(World& world, const std::string& path);
-
-// Reads <assetsdir>/data/enemies.json into world.EnemyTypes, loading the textures
-// it names (paths in the file are relative to assetsdir).
+// Reads the enemy types from a JSON file into world.EnemyTypes.
 // Returns false (and prints why) if the file is missing or malformed.
-bool LoadEnemies(World& world, const std::string& assetsdir);
+bool LoadEnemies(World& world, const std::string& path);
+
+// Reads <assetsdir>/data/textures.json and loads every image it lists into
+// world.Textures, under the id written in the file. Image paths are relative to
+// assetsdir. Needs the window to exist first: textures live on the graphics card.
+// Returns false (and prints why) on the first problem.
+bool LoadTextures(World& world, const std::string& assetsdir);

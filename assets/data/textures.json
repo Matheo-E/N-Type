@@ -1,0 +1,9 @@
+{
+  "textures": [
+    { "id": 1, "path": "sprites/players.png" },
+    { "id": 2, "path": "sprites/bydos.png" },
+    { "id": 3, "path": "sprites/pod.png" },
+    { "id": 4, "path": "sprites/shots.png" },
+    { "id": 5, "path": "sprites/explosions.png" }
+  ]
+}
