@@ -30,44 +30,52 @@ and separate functions act on the data.
 The first target is a **bullet hell**. The component list also contains RPG
 components, ready for later.
 
-**What works today**
+**Current network client**
 
-- An 800x600 window at 60 FPS.
-- A green square (the player): **Z Q S D** moves it (AZERTY layout), **Space** shoots.
-- Two enemy types loaded from `assets/data/enemies.json`, drawn as sprites from a
-  shared texture store. The fairy weaves down the screen firing fans of three bullets.
-  The midboss sweeps side to side firing rings of sixteen.
-- Collisions with damage: the player has 3 HP and one second of protection after a
-  hit. Enemies die when their HP reaches 0.
-- Bullets expire (lifetime) or are removed when far outside the window.
-- Followers (enemies steering toward a parent) exist as a system, but nothing
-  spawns them yet.
+- A title illustration with an immediately available red PLAY button and menu music.
+- FreeGUI connection, main menu, lobby creation/list, settings and pause screens.
+  Player name starts empty; host and port remain prefilled.
+- A visual Controls screen shared by launcher settings and pause, with keyboard,
+  mouse and gamepad tabs. Assignments are previews; remapping is not implemented.
+- A placeholder best-score card (`--`), without score calculation or persistence.
+- Up to four continuously animated teeth, including at rest. Arrows, WASD or
+  ZQSD move each player across the complete fixed 1280×720 play area.
+- Constant automatic parallax independent of player movement, timed levels and
+  day/night transitions, with level soundtracks.
+- One window retained across game, restart and menu transitions. F11 restores
+  the previous windowed bounds. The game fits its full play area into that window.
 
-**What does not work yet**: see [section 10](#10-what-is-not-built-yet). In short:
-only a few built-in patterns, no waves, no UI or pause, no sound, no game over.
+The launcher lobby list is local to a launcher session. Room discovery and live
+membership are not implemented. Play solo currently enters the common UDP server.
+The pause overlay stops local movement input; the shared server, scrolling and
+sprite animation continue. Scores, waves and full combat integration remain work
+for later.
+
+The ECS sections below describe reusable engine code and the old standalone
+`src/main.cpp` demo. That demo is not a target of the current root CMake build;
+its two enemies and combat logic should not be confused with the network client.
 
 ---
 
 ## 2. Build and run
 
-**Requirements**: a C++20 compiler (GCC 13+ or Clang), CMake 3.25+, Ninja,
-SFML 2.6 and nlohmann/json.
+Use the root build scripts; requirements and platform details are in
+[README.md](../README.md#build).
 
 ```sh
-# Debian / Ubuntu
-sudo apt install g++ cmake ninja-build libsfml-dev nlohmann-json3-dev
-
-cmake -S . -B build -G Ninja
-cmake --build build
-./build/ntype
+./build.sh
+./r-type_server -p 4242
+# In another terminal:
+./r-type_client
 ```
 
-- Move with **Z Q S D**, shoot with **Space**. Close the window to quit.
-- The game finds `assets/` through a path compiled into the binary
-  (`NTYPE_ASSETS_DIR`), so it runs from any working directory. If you move the
-  repository, re-run the `cmake -S . -B build` step.
-- Warnings are on (`-Wall -Wextra -Wpedantic`). Keep the build warning-free.
-- SFML 3 will **not** work: its API and CMake targets are different.
+On Windows, run `build.bat`, then `r-type_server.exe` and `r-type_client.exe`.
+The client supports `-n` (name), `-h` (host), and `-p` (port). Enter a player name
+in the connection form, then use Play solo to connect to a running server.
+Escape opens the in-game pause menu; F11 toggles fullscreen.
+
+Assets are found through `NTYPE_ASSET_DIR`, set by CMake. Reconfigure if the
+repository is moved. Use SFML 2.6, not SFML 3. Keep builds warning-free.
 
 ---
 
@@ -111,7 +119,16 @@ Its presence in the map *is* the information.
 
 ```
 CMakeLists.txt           build description
-src/main.cpp             creates the world and window, runs the game loop
+client/src/main.cpp      opens the launcher and manages game/restart/menu transitions
+client/src/Launcher.cpp  title, connection, main menu, local lobby list and forms
+client/src/ClientApp.cpp server snapshots, tooth animation, parallax and pause UI
+client/src/ControlsMenu.cpp visual control tabs and row selection (no remapping)
+client/src/GuiSkin.hpp   shared FreeGUI panels/buttons and smooth text rendering
+client/src/WindowState.hpp window bounds and fullscreen restoration
+server/src/              authoritative movement, snapshots and network thread
+shared/                 configuration and command-line options
+common/protocol/         binary packet encoding and decoding
+src/main.cpp             old standalone engine demo, not built by root CMake
 engine/include/          headers
   Component.hpp          every component (data only)
   World.hpp              all the component maps + Destroy
@@ -127,13 +144,16 @@ engine/src/              the matching .cpp files
 assets/
   data/enemies.json      enemy types
   data/game.json         from an earlier version of the project; unused
-  sprites/ audio/ fonts/ resources for later (unused by the code today)
+  sprites/ audio/        player/enemy images, music and UI sound
+  backgrounds/           title/menu artwork and level parallax layers
+  FreeGUI/png/           original interface sprite sheets
 docs/
   PROJECT_GUIDE.md       this file
   pdfs/                  the project subject
 ```
 
-Headers are included with relative paths (`"../include/Foo.hpp"`).
+Current client/server headers use include directories configured by CMake. Some
+legacy engine files still use relative includes.
 
 ---
 
@@ -289,7 +309,7 @@ independent of frame rate.
   id, or -1 (with a message) if the file cannot be loaded. The same path always
   gives the same id, so many enemies share one texture.
 
-### 5.7 `main.cpp`: the game loop
+### 5.7 `src/main.cpp`: the legacy engine demo
 
 1. Create the `World`.
 2. Load the enemy types and their textures from `NTYPE_ASSETS_DIR` (exit with an error if
@@ -299,72 +319,80 @@ independent of frame rate.
 5. Loop while the window is open: call `Action(world, window, dt, player)`, then
    measure `dt` with an `sf::Clock`.
 
+### 5.8 Current client: simple responsibilities
+
+- `client/src/main.cpp` owns the shared window and `WindowState`, and chooses
+  between a new game, restart and return to the launcher.
+- `Launcher.cpp` uses a `Page` enum and ordinary event-condition branches for
+  navigation. A local vector holds the lobby list; no room packets are sent.
+- `ClientApp.cpp` copies server positions and draws teeth using the fixed
+  `0, 1, 2, 1` animation sequence. It needs no movement history to animate.
+  The background advances only with elapsed time, and the server clamps players
+  to X=0…1240 and Y=0…680.
+- `ControlsMenu.cpp/.hpp` use a device enum, fixed label arrays and simple
+  click conditions. They draw the same preview in launcher and pause, restore
+  the caller's view after drawing, and leave input bindings unchanged.
+- `GuiSkin.hpp` stores the two UI textures and draws their original rectangles.
+  It also creates higher-resolution SFML text and scales it to the logical UI.
+- `WindowState.hpp` keeps ordinary size/position fields. Transitions reuse the
+  window; only F11 recreates it to change the native window style.
+
+
 ---
 
 ## 6. The enemy data file
 
-`assets/data/enemies.json`:
+`assets/data/enemies.json` now defines twelve unique enemies, grouped by level:
+11–14 (ice), 21–24 (candy), and 31–34 (dentist). The last id in each group is
+the boss. HP and speed match the requested values; radii, sprite scales,
+projectiles, damage, cadence, area attacks and boss phases are authored there.
 
-```json
-{
-  "enemies": [
-    {
-      "id": 1,
-      "name": "fairy",
-      "hp": 10,
-      "radius": 14,
-      "color": [200, 60, 60],
-      "speed": 80,
-      "fire_interval": 1.2,
-      "attack_pattern": 1,
-      "flight_pattern": 1,
-      "sprite": { "texture": "sprites/bydos.png", "rect": [5, 6, 21, 24], "scale": 2 }
-    }
-  ]
-}
-```
+See [the enemy catalogue](ENEMIES.md) for every enemy, the balancing choices,
+units, field meanings and the boundary between loaded and planned behavior.
 
-| Key | Meaning | Default |
-|---|---|---|
-| `id` | **Required.** The number passed to `CreateEEnemy`. | none |
-| `name` | Display name (`EName`). | `"enemy"` |
-| `hp` | Hit points (`EHealth`). | 1 |
-| `radius` | Size of the circle, and of the hurtbox. | 16 |
-| `color` | `[r, g, b]`, each 0-255. | white |
-| `speed` | Movement speed (`ESpeed`). | 0 |
-| `fire_interval` | Seconds between volleys (`ESpawner.Interval`). | 1.0 |
-| `attack_pattern` | Id of the bullet pattern. **-1 or absent: the enemy has no `ESpawner`.** | -1 |
-| `flight_pattern` | Id of the movement pattern. **-1 or absent: the enemy has no `EFlight`.** | -1 |
-| `sprite` | Optional object: `texture` (path relative to `assets/`), `rect` (`[x, y, width, height]` in the image, for a sprite sheet cell) and `scale`. **Absent: the enemy is drawn as a circle of colour `color`.** | none |
+The current loader reads `id`, `name`, `hp`, `radius`, `color`, `speed`,
+`fire_interval`, `attack_pattern`, `flight_pattern` and `sprite`. New fields
+such as `level`, `role`, `contact_damage`, `score`, `movement`, `attacks` and
+`enrage` are preparation data and are currently ignored by the engine.
+Legacy pattern ids stay at -1 to avoid enabling incompatible vertical-demo
+behavior. The network server does not spawn these enemies yet.
 
-The pattern ids select the built-in patterns listed in section 5.5.
+`id` is required. Missing supported fields keep their `EnemyData` defaults.
+Sprite paths are relative to `assets/`; `rect` selects the source rectangle
+and `scale` sets its uniform scale. The old standalone `src/main.cpp` still
+references ids 1/2 and must be updated if brought back into the build.
 
 ---
 
 ## 7. Conventions
 
-- **Naming: PascalCase.** Each word starts with a capital, words joined with no
-  underscore: `CreateEEnemy`, `NextId`, `FireInterval`. This applies to types,
-  functions, members and the world's maps. Parameters and local variables are
-  lowercase (`world`, `id`, `pos`, `dt`).
-  Component class names start with `E` (`EPosition`). Some JSON keys use
-  `snake_case` (`fire_interval`): that is the file's own format.
-- **`class` with public data** for components. (`struct` and `class` are the same in C++
-  except for default access. We use `class` throughout.)
-- **At most 4 parameters per function.** When a function wants more, split it, or
-  put the extra work in a system.
-- **Declare in the header, define in the `.cpp`.** Never put a function body in a header
-  (unless it is `inline` or inside a class), or including it from two files breaks the
-  link.
-- **`#pragma once`** on the first line of every header.
-- **Entities are `int`s.** `-1` is "no entity" / "none".
-- **Pass big things by reference** (`World&`, `sf::RenderWindow&`). Without the `&`,
-  C++ copies the whole object. For a `World` the change would be lost, and an
-  `sf::RenderWindow` cannot be copied at all.
-- **Headers do not include what they do not use.** In particular, keep SFML includes to
-  the places that need them.
-- **Check before you read.** Use `find` and compare to `end()`, not `[]`, when you only
-  want to look something up (see [pitfalls](#9-pitfalls)).
+Use ordinary C++20: small functions, explicit conditions and loops, standard
+containers and simple classes/structs. Add abstractions only when they remove
+real duplication. Avoid custom templates, macros, registries or inheritance for
+simple UI and animation work. Existing STL/SFML facilities are sufficient.
+
+- **Formatting:** 4 spaces, no tabs, opening braces on the same line, a soft
+  100-column limit, spaces around operators and consistent indentation. The root
+  `.clang-format` records these settings. Use braces for new condition/loop bodies.
+- **Naming:** client/server functions and locals use `snake_case`, classes use
+  `PascalCase`, private class fields end in `_`, and constants use `kName`.
+  Keep existing engine APIs/components in their established `PascalCase`
+  (`CreateEPlayer`, `EPosition`, `World::Positions`); avoid unrelated renaming.
+- **Data:** plain structs for settings and UI records; ordinary classes for
+  objects with behavior. Components keep their established public-data classes.
+- **Headers:** start with `#pragma once`. Put normal implementations in `.cpp`;
+  small shared inline helpers may stay in headers. Include what the file uses.
+- **Parameters:** pass heavy SFML objects and worlds by reference; use `const`
+  for read-only references. Keep parameter lists readable; avoid adding a framework
+  solely to wrap a few drawing arguments.
+- **State:** keep data in its owner (`WindowState`, `ClientApp`, `World`) rather
+  than global mutable variables. Do not track movement history just to animate.
+- **Containers:** entities remain integer ids. Check `find()` against `end()`
+  before reading; use `[]` only when inserting/default-constructing is intended.
+- **Scope:** preserve server authority and the wire protocol during visual changes.
+  Change only the files needed for the task; explain each modified file.
+- **Validation:** compile with the existing warnings, run relevant existing tests,
+  and check changed graphical behavior. Do not add redundant test infrastructure.
 
 ---
 
@@ -463,25 +491,17 @@ These are mistakes that have already happened in this project.
 
 ## 10. What is not built yet
 
-In rough order of what unlocks the most:
+- Networked room creation/discovery, isolation, synchronized capacity and membership.
+- Input remapping, binding persistence and mouse/gamepad gameplay integration.
+- Score calculation, best-score persistence, game over and boss-driven progression.
+- Server-driven enemies, combat and wave scheduling in the current network game.
+- Generic ECS UI/audio/animation integration. The client already has its own
+  FreeGUI menus, sound and continuously animated tooth sprite.
+- Prediction/interpolation and reliable delivery for messages that would need it.
 
-1. **A pattern definition format.** Patterns are `switch` cases in code. For many
-   patterns, or to share them between games, describe them in data (JSON): bullet
-   count, angles, speed, delays.
-2. **Waves**: a script of "at time T, spawn enemy E at X" (also data). Today `main`
-   spawns two enemies by hand, and `CreateEEnemyFollower` is never called.
-3. **Game states**: pause, game over (the player is simply destroyed at 0 HP), a score.
-   Global state such as "paused" is not a component.
-4. **UI**: `EText`, `EButton`, with a shared font store like the texture store.
-5. **A spatial index** (a quadtree) for collisions with thousands of bullets. It is
-   *global* data living in `World`, not a component, rebuilt each frame.
-6. **Animation**: use `EAnimation` to step through the cells of a sprite sheet.
-7. **Draw order** with `EZIndex`, and batching bullets into one draw call.
-8. **Audio**, and the RPG components' systems.
-9. **Bullet reuse**: recycle dead bullets instead of creating new entities.
-10. **A generic registry** (templates, one container per type found automatically),
-    to remove the hand-written map and `erase` line per component. Worth doing
-    when the component count makes the manual step error-prone.
+Engine extensions such as spatial collision indexing or bullet batching should be
+added only when measured needs justify them. A generic template registry is not
+required for the current scope.
 
 ---
 

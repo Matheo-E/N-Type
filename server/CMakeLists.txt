@@ -1,12 +1,25 @@
-add_executable(r-type_server
-    src/main.cpp
+# The whole server except main(), shared by the executable and the tests.
+add_library(ntype_server_core STATIC
+    src/Game.cpp
+    src/GameData.cpp
+    src/Lobby.cpp
+    src/Lobbies.cpp
+    src/Console.cpp
     src/NetworkThread.cpp
     src/Server.cpp
 )
-target_link_libraries(r-type_server PRIVATE ntype_shared ntype_engine)
+target_include_directories(ntype_server_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(ntype_server_core PUBLIC ntype_shared ntype_engine PRIVATE nlohmann_json::nlohmann_json)
+# The server reads enemies, patterns, items and levels from assets/data.
+target_compile_definitions(ntype_server_core PRIVATE NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
 
-if(MSVC)
-    target_compile_options(r-type_server PRIVATE /W4 /permissive- /utf-8)
-else()
-    target_compile_options(r-type_server PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
-endif()
+add_executable(r-type_server src/main.cpp)
+target_link_libraries(r-type_server PRIVATE ntype_server_core)
+
+foreach(target ntype_server_core r-type_server)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+    endif()
+endforeach()

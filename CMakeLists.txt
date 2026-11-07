@@ -32,6 +32,8 @@ add_library(ntype_engine STATIC
     engine/src/Behaviour.cpp
     engine/src/Combat.cpp
     engine/src/Factory.cpp
+    engine/src/Input.cpp
+    engine/src/Items.cpp
     engine/src/Loader.cpp
     engine/src/System.cpp
 )
@@ -47,14 +49,34 @@ if(NTYPE_BUILD_CLIENT)
 endif()
 add_subdirectory(server)
 
-enable_testing()
-add_executable(protocol_test tests/protocol/protocol_test.cpp)
-target_include_directories(protocol_test PRIVATE "${CMAKE_SOURCE_DIR}")
-target_link_libraries(protocol_test PRIVATE ntype_protocol)
-# The test is made of assert(): keep them in Release builds too.
-if(MSVC)
-    target_compile_options(protocol_test PRIVATE /UNDEBUG)
-else()
-    target_compile_options(protocol_test PRIVATE -UNDEBUG)
+# Engine sandbox: the engine alone in one window, no network (sandbox/main.cpp).
+if(NTYPE_BUILD_CLIENT)
+    add_executable(ntype_sandbox sandbox/main.cpp)
+    target_link_libraries(ntype_sandbox PRIVATE ntype_engine)
+    target_compile_definitions(ntype_sandbox PRIVATE NTYPE_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
 endif()
-add_test(NAME protocol COMMAND protocol_test)
+
+enable_testing()
+# Tests are made of assert(): keep them in Release builds too.
+function(ntype_add_test name source)
+    add_executable(${name} ${source})
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}")
+    target_link_libraries(${name} PRIVATE ${ARGN})
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(${name} PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+ntype_add_test(protocol_test tests/protocol/protocol_test.cpp ntype_protocol)
+ntype_add_test(game_test tests/server/game_test.cpp ntype_server_core)
+target_compile_definitions(game_test PRIVATE NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
+ntype_add_test(lobby_test tests/server/lobby_test.cpp ntype_server_core)
+target_compile_definitions(lobby_test PRIVATE NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
+ntype_add_test(engine_test tests/engine/engine_test.cpp ntype_engine)
+target_compile_definitions(engine_test PRIVATE NTYPE_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
+if(NTYPE_BUILD_CLIENT)
+    ntype_add_test(client_network_test tests/client/client_network_test.cpp ntype_client_core ntype_server_core)
+endif()

@@ -27,6 +27,8 @@ public:
     NetworkThread& operator=(const NetworkThread&) = delete;
 
     std::vector<Datagram> poll() { return inbound_.drain(); }
+    // The bound UDP port (useful when constructed with port 0).
+    std::uint16_t port() const { return port_; }
     void send(const asio::ip::udp::endpoint& to, std::vector<std::uint8_t> data);
 
 private:
@@ -35,6 +37,7 @@ private:
     asio::io_context io_;
     asio::ip::udp::socket socket_;
     asio::ip::udp::endpoint sender_;
+    std::uint16_t port_ = 0;
     std::array<std::uint8_t, 1500> buffer_{};
     ThreadSafeQueue<Datagram> inbound_;
     std::thread thread_;

@@ -1,23 +1,33 @@
 #pragma once
 
-#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "Component.hpp"
 #include "EnemyData.hpp"
+#include "ItemData.hpp"
+#include "Input.hpp"
+#include "PatternData.hpp"
+#include "AllTextures.hpp"
 
 // One map per component type, keyed by entity id.
 class World {
 public:
     int NextId = 0;
-    int NextTextureId = 0;
+
+    KeyMap Keys;       // which physical key each Key reads (see Input.hpp)
+    ActionMap Actions; // which Key each action uses
 
     // Loaded definitions (not per-entity, so not touched by Destroy).
     std::unordered_map<int, EnemyData> EnemyTypes;
+    std::unordered_map<int, ItemData> ItemTypes;
+    std::unordered_map<int, AttackPattern> AttackPatterns;
+    std::unordered_map<int, FlightPattern> FlightPatterns;
+    std::unordered_map<int, AllTexture> Textures;
 
-    // Textures are loaded once and shared: components only hold the id.
-    std::unordered_map<int, sf::Texture> Textures;
-    std::unordered_map<std::string, int> TexturePaths;  // file path -> texture id
+    // What died, oldest first. Collision adds to it; the game reads it (scores,
+    // explosions) and clears it. Not per-entity, so not touched by Destroy.
+    std::vector<EDeath> Deaths;
 
     // Space
     std::unordered_map<int, EPosition> Positions;
@@ -34,10 +44,7 @@ public:
     std::unordered_map<int, ESolid> Solids;
 
     // Drawing
-    std::unordered_map<int, ERectangle> Rectangles;
-    std::unordered_map<int, ECircle> Circles;
-    std::unordered_map<int, EConvex> Convexes;
-    std::unordered_map<int, ETextureId> TextureIds;
+    std::unordered_map<int, ESprite> Sprites;
     std::unordered_map<int, EAnimation> Animations;
     std::unordered_map<int, EZIndex> ZIndexes;
 
@@ -51,6 +58,7 @@ public:
     std::unordered_map<int, EPlayer> Players;
     std::unordered_map<int, EEnemy> Enemies;
     std::unordered_map<int, EBullet> Bullets;
+    std::unordered_map<int, EPickup> Pickups;
 
     // Combat
     std::unordered_map<int, EHealth> Healths;
@@ -80,10 +88,7 @@ public:
         Layers.erase(id);
         Solids.erase(id);
 
-        Rectangles.erase(id);
-        Circles.erase(id);
-        Convexes.erase(id);
-        TextureIds.erase(id);
+        Sprites.erase(id);
         Animations.erase(id);
         ZIndexes.erase(id);
 
@@ -95,6 +100,7 @@ public:
         Players.erase(id);
         Enemies.erase(id);
         Bullets.erase(id);
+        Pickups.erase(id);
 
         Healths.erase(id);
         Damages.erase(id);

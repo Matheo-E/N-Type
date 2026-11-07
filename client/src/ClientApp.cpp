@@ -4,33 +4,59 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <string>
 
+#include <SFML/Graphics/CircleShape.hpp>
+#include <SFML/Graphics/RectangleShape.hpp>
+#include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
+#include <SFML/OpenGL.hpp>
 
 #include "Factory.hpp"
+#include "Loader.hpp"
 #include "BackgroundConfig.hpp"
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
 #include "System.hpp"
 #include "UiClickSound.hpp"
+#include "UiFont.hpp"
+#include "Hud.hpp"
+#include "PlayerColors.hpp"
+#include "ResultsScreen.hpp"
 
 namespace ntype::client {
 
 namespace {
 
-const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange", "green", "pink"};
 
+constexpr int kPlayerTexture = 1;  // id of sprites/player/tooth.png in assets/data/textures.json
+constexpr int kHaloTexture = 21;   // id of sprites/player/tooth_halo.png (tools/make_tooth_halo.py)
+// Halo frames are 4x smaller than the tooth's, plus 28 pixels of margin on each side.
+constexpr int kHaloFrameSize = 237;
+constexpr float kHaloShrink = 4.f;
+constexpr sf::Uint8 kHaloOpacity = 235;
 constexpr int kPlayerFrameSize = 724;
 constexpr float kRenderedPlayerSize = 88.f;
-constexpr float kCameraAnchorX = 320.f;
-constexpr float kCameraResponsiveness = 10.f;
+// The tooth as its health goes down: intact, damaged, broken (1 HP left), and their halos
+// (ids in assets/data/textures.json; halos made by tools/make_tooth_halo.py).
+constexpr int kToothLooks[] = {kPlayerTexture, 23, 24};
+constexpr int kHaloLooks[] = {kHaloTexture, 25, 26};
+// Impact feedback.
+constexpr float kEnemyFlashSeconds = 0.08f;
+constexpr float kPlayerFlashSeconds = 0.15f;
+constexpr float kPlayerBlinkSeconds = 1.0f; // as long as the engine's protection after a hit
+constexpr float kShakeSeconds = 0.25f;
+constexpr float kShakePixels = 7.f;
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
-const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
-const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
-const sf::FloatRect kLobbyButton{350.f, 450.f, 280.f, 100.f};
-const sf::FloatRect kMusicButton{650.f, 450.f, 280.f, 100.f};
+const sf::FloatRect kContinueButton{430.f, 185.f, 420.f, 110.f};
+const sf::FloatRect kLobbyInfo{340.f, 315.f, 600.f, 110.f};
+const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
+const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
+const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
+const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
+
 
 constexpr std::uint8_t bit(const protocol::InputType key) {
     return static_cast<std::uint8_t>(key);
@@ -38,23 +64,28 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 
 } // namespace
 
-ClientApp::ClientApp(sf::RenderWindow& window, bool& fullscreen, const std::string& name,
-                     const std::string& host, const std::uint16_t port,
+ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, ClientNetwork& network,
                      const bool music_enabled)
-    : name_(name), network_(host, port), window_(window), fullscreen_(fullscreen),
+    : network_(network), window_(window), window_state_(window_state),
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
-    const std::string player_path = asset_dir + "/sprites/player/tooth.png";
-    const std::string menu_path = asset_dir + "/ui/pause_menu_sheet.png";
-    if (!player_texture_.loadFromFile(player_path))
-        throw std::runtime_error("Unable to load player sprite: " + player_path);
-    if (!menu_texture_.loadFromFile(menu_path))
-        throw std::runtime_error("Unable to load pause menu sprite sheet: " + menu_path);
+    if (!LoadTextures(world_, asset_dir))
+        throw std::runtime_error("Unable to load the textures listed in assets/data/textures.json");
+    // The looks of what the server sends: enemy types, shots (attack patterns) and items.
+    const std::string data_dir = asset_dir + "/data/";
+    if (!LoadEnemies(world_, data_dir + "enemies.json") ||
+        !LoadAttackPatterns(world_, data_dir + "attack_patterns.json") ||
+        !LoadItems(world_, data_dir + "items.json"))
+        throw std::runtime_error("Unable to load the game data in " + data_dir);
+    if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
+    if (!pause_gui_.buttons.loadFromFile(asset_dir + "/FreeGUI/png/Button.png") ||
+        !pause_gui_.windows.loadFromFile(asset_dir + "/FreeGUI/png/Window.png"))
+        throw std::runtime_error("Unable to load pause menu assets");
+    pause_gui_.buttons.setSmooth(true);
+    pause_gui_.windows.setSmooth(true);
+    hud_.emplace(ui_font_, pause_gui_.windows, world_.Textures.at(kPlayerTexture).Image, asset_dir);
     load_background(0, 0);
     create_window();
-    if (!transition_frame_.create(config::kWidth, config::kHeight))
-        throw std::runtime_error("Unable to create the day/night transition buffer");
-    transition_frame_.setSmooth(true);
     load_level_music(0);
     frame_clock_.restart();
 }
@@ -116,7 +147,10 @@ void ClientApp::load_level_music(const std::size_t level) {
  */
 void ClientApp::update_adventure(const float elapsed_seconds) {
     adventure_elapsed_seconds_ += elapsed_seconds;
-    const auto selection = background::selection_at_time(adventure_elapsed_seconds_);
+    auto selection = background::selection_at_time(adventure_elapsed_seconds_);
+    // The server decides the level; day and night still follow the clock.
+    if (const auto& lobby = network_.lobby(); lobby && lobby->level > 0)
+        selection.level = std::min<std::size_t>(lobby->level - 1U, background::kLevelCount - 1U);
 
     if (selection.level != current_level_) {
         load_background(selection.level, selection.ambience);
@@ -142,20 +176,8 @@ void ClientApp::update_adventure(const float elapsed_seconds) {
     ambience_transition_active_ = true;
 }
 
-void ClientApp::create_window(const bool recreate) {
-    if (!window_.isOpen() || recreate) {
-        if (fullscreen_) {
-            window_.create(sf::VideoMode::getDesktopMode(), "N-Type | Connecting",
-                           sf::Style::Fullscreen);
-        } else {
-            window_.create(sf::VideoMode(config::kWidth, config::kHeight),
-                           "N-Type | Connecting", sf::Style::Default);
-        }
-    } else {
-        window_.setTitle("N-Type | Connecting");
-        if (!fullscreen_) window_.setSize({config::kWidth, config::kHeight});
-    }
-    window_.setFramerateLimit(60);
+void ClientApp::create_window() {
+    window_state_.open(window_, "N-Type | Connecting");
     update_view();
 }
 
@@ -163,8 +185,12 @@ void ClientApp::update_view() {
     const auto size = window_.getSize();
     if (size.x == 0 || size.y == 0) return;
     const float window_ratio = static_cast<float>(size.x) / static_cast<float>(size.y);
-    const float game_ratio = static_cast<float>(config::kWidth) / static_cast<float>(config::kHeight);
-    sf::FloatRect viewport(0.f, 0.f, 1.f, 1.f);
+    const float game_ratio = static_cast<float>(config::kWidth) /
+                             static_cast<float>(config::kHeight);
+    sf::View view(sf::FloatRect(0.f, 0.f, static_cast<float>(config::kWidth),
+                               static_cast<float>(config::kHeight)));
+    // Fit the complete play area into the retained window, without cropping it.
+    sf::FloatRect viewport{0.f, 0.f, 1.f, 1.f};
     if (window_ratio > game_ratio) {
         viewport.width = game_ratio / window_ratio;
         viewport.left = (1.f - viewport.width) / 2.f;
@@ -172,10 +198,10 @@ void ClientApp::update_view() {
         viewport.height = window_ratio / game_ratio;
         viewport.top = (1.f - viewport.height) / 2.f;
     }
-    sf::View view(sf::FloatRect(0.f, 0.f, static_cast<float>(config::kWidth),
-                               static_cast<float>(config::kHeight)));
     view.setViewport(viewport);
     window_.setView(view);
+    window_.setActive(true);
+    glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
 }
 
 GameExitAction ClientApp::run() {
@@ -185,14 +211,33 @@ GameExitAction ClientApp::run() {
             break;
         }
         network_.update(pause_menu_open_ ? 0 : read_input());
-        std::string title = "N-Type | " + name_ + " | " + network_.status();
-        if (const auto id = network_.id()) {
-            title += std::string(" (") + kColorNames[*id - 1U] + ")";
+        // The lobby decides when the game ends; the session itself stays open.
+        if (network_.phase() != Phase::InLobby) {
+            exit_action_ = GameExitAction::Lobby; // Connection lost, or removed from the lobby.
+            break;
         }
+        const auto& lobby = *network_.lobby();
+        if (lobby.state != protocol::LobbyPhase::Playing) {
+            if (lobby.result == protocol::GameResult::None) {
+                exit_action_ = GameExitAction::WaitingRoom; // stopped without a result
+                break;
+            }
+            if (!results_open_) {
+                results_open_ = true;
+                pause_menu_open_ = false;
+                controls_menu_.open = false;
+            }
+        } else if (results_open_) {
+            results_open_ = false; // The leader started again: straight into the new game.
+        }
+        std::string title = "N-Type | " + network_.name() + " | " + lobby.name + " (" + lobby.code + ")";
+        if (lobby.yourSlot >= 1 && lobby.yourSlot <= config::kMaxPlayers) {
+            title += std::string(" | ") + kPlayerColorNames[lobby.yourSlot - 1U];
+        }
+        if (network_.is_spectator()) title += " | spectator";
         window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: menu");
         render();
     }
-    network_.disconnect();
     music_.stop();
     return exit_action_;
 }
@@ -200,18 +245,42 @@ GameExitAction ClientApp::run() {
 void ClientApp::poll_events() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
+        if (controls_menu_.open && controls_menu_.handle_event(window_, event)) {
+            continue;
+        }
         if (event.type == sf::Event::Closed) {
             exit_action_ = GameExitAction::Quit;
             session_active_ = false;
             window_.close();
             return;
         }
+        if (results_open_) {
+            // The results screen only leaves for the waiting room (and keeps F11, resizing).
+            const bool key = event.type == sf::Event::KeyPressed &&
+                             (event.key.code == sf::Keyboard::Return || event.key.code == sf::Keyboard::Escape);
+            const bool click = event.type == sf::Event::MouseButtonPressed &&
+                               event.mouseButton.button == sf::Mouse::Left &&
+                               kResultsContinue.contains(window_.mapPixelToCoords(
+                                   {event.mouseButton.x, event.mouseButton.y}));
+            if (key || click) {
+                UiClickSound::instance().play();
+                exit_action_ = GameExitAction::WaitingRoom;
+                session_active_ = false;
+                return;
+            }
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
+                window_state_.toggle_fullscreen(window_, "N-Type");
+                update_view();
+            }
+            if (event.type == sf::Event::Resized) update_view();
+            continue;
+        }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
             pause_menu_open_ = !pause_menu_open_;
         }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
-            fullscreen_ = !fullscreen_;
-            create_window(true);
+            window_state_.toggle_fullscreen(window_, "N-Type");
+            update_view();
         }
         if (event.type == sf::Event::Resized) update_view();
         if (event.type == sf::Event::MouseButtonPressed &&
@@ -220,16 +289,15 @@ void ClientApp::poll_events() {
             if (kMenuButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = !pause_menu_open_;
+            } else if (pause_menu_open_ && kControlsButton.contains(point)) {
+                UiClickSound::instance().play();
+                controls_menu_.open = true;
             } else if (pause_menu_open_ && kContinueButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = false;
-            } else if (pause_menu_open_ && kRestartButton.contains(point)) {
-                UiClickSound::instance().play();
-                exit_action_ = GameExitAction::Restart;
-                session_active_ = false;
-                return;
             } else if (pause_menu_open_ && kLobbyButton.contains(point)) {
                 UiClickSound::instance().play();
+                network_.leave();
                 exit_action_ = GameExitAction::Lobby;
                 session_active_ = false;
                 return;
@@ -240,13 +308,17 @@ void ClientApp::poll_events() {
                     music_.play();
                 else
                     music_.pause();
+            } else if (pause_menu_open_ && kClickSoundButton.contains(point)) {
+                auto& click_sound = UiClickSound::instance();
+                click_sound.set_enabled(!click_sound.enabled());
             }
         }
     }
 }
 
 std::uint8_t ClientApp::read_input() const {
-    if (!window_.hasFocus() || pause_menu_open_) {
+    // Spectators watch: they join as players at the next level.
+    if (!window_.hasFocus() || pause_menu_open_ || results_open_ || network_.is_spectator()) {
         return 0;
     }
     using Key = sf::Keyboard::Key;
@@ -272,57 +344,183 @@ std::uint8_t ClientApp::read_input() const {
 }
 
 void ClientApp::sync_world() {
-    const auto& players = network_.players();
-    // Only players in the latest snapshot keep an entity.
+    const auto& entities = network_.entities();
+    std::map<std::uint16_t, const protocol::Entity*> current;
+    for (const auto& entity : entities) current[entity.id] = &entity;
+    // Only what the latest frame holds keeps its sprites; an id that now means
+    // something else (another kind or type) is rebuilt.
     for (auto it = entities_.begin(); it != entities_.end();) {
-        const auto id = it->first;
-        if (std::none_of(players.begin(), players.end(), [id](const auto& player) { return player.id == id; })) {
-            world_.Positions.erase(it->second);
-            world_.Rectangles.erase(it->second);
-            previous_positions_.erase(id);
-            last_movement_times_.erase(id);
+        const auto found = current.find(it->first);
+        if (found == current.end() || found->second->kind != it->second.kind ||
+            found->second->type != it->second.type) {
+            if (it->second.halo >= 0) world_.Destroy(it->second.halo);
+            if (it->second.sprite >= 0) world_.Destroy(it->second.sprite);
             it = entities_.erase(it);
         } else {
             ++it;
         }
     }
-    for (const auto& player : players) {
-        auto [it, added] = entities_.try_emplace(player.id, 0);
+    for (const auto& entity : entities) {
+        auto [it, added] = entities_.try_emplace(entity.id);
         if (added) {
-            it->second = CreateE(world_);
+            add_mirror(it->second, entity);
+        } else if (entity.hits != it->second.hits) {
+            on_hit(it->second, entity);
         }
-        // The server is authoritative: positions are copied, never simulated here.
-        world_.Positions[it->second].Xy = {static_cast<float>(player.x), static_cast<float>(player.y)};
+        it->second.hits = entity.hits;
+        if (entity.kind == config::kPlayerKind) set_player_look(it->second, entity.hp);
+        // The server is authoritative: positions are copied, never simulated here. It gives
+        // a player's top-left corner and the centre of everything else; the engine draws
+        // sprites around their centre.
+        sf::Vector2f centre{static_cast<float>(entity.x), static_cast<float>(entity.y)};
+        if (entity.kind == config::kPlayerKind) centre += {config::kPlayerSize / 2.f, config::kPlayerSize / 2.f};
+        for (const int part : {it->second.halo, it->second.sprite})
+            if (part >= 0) world_.Positions[part].Xy = centre;
     }
 }
 
-/**
- * @brief Smoothly follows the local player while leaving server coordinates untouched.
- * @param elapsed_seconds Time elapsed since the previous rendered frame.
- */
-void ClientApp::update_camera(const float elapsed_seconds) {
-    const auto local_id = network_.id();
-    if (!local_id) return;
-    const auto entity = entities_.find(*local_id);
-    if (entity == entities_.end()) return;
+void ClientApp::add_mirror(Mirror& mirror, const protocol::Entity& entity) {
+    using protocol::EntityKind;
+    mirror.kind = entity.kind;
+    mirror.type = entity.type;
+    switch (static_cast<EntityKind>(entity.kind)) {
+    case EntityKind::Player: {
+        const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
+        // Same Z for both: the engine breaks ties by entity id, so the halo, created
+        // first, is painted behind the tooth.
+        mirror.halo = CreateE(world_);
+        ESprite& halo = world_.Sprites[mirror.halo];
+        halo.TextureId = kHaloTexture;
+        halo.Source = {0, 0, kHaloFrameSize, kHaloFrameSize};
+        halo.Scale = {scale * kHaloShrink, scale * kHaloShrink};
+        halo.Color = player_color(entity.id);
+        halo.Color.a = kHaloOpacity;
 
-    const float player_x = world_.Positions.at(entity->second).Xy.x;
-    const float target = std::max(0.f, player_x - kCameraAnchorX);
-    if (!camera_initialized_) {
-        camera_x_ = target;
-        camera_initialized_ = true;
+        mirror.sprite = CreateE(world_);
+        ESprite& tooth = world_.Sprites[mirror.sprite];
+        tooth.TextureId = kPlayerTexture;
+        tooth.Source = {0, 0, kPlayerFrameSize, kPlayerFrameSize};
+        tooth.Scale = {scale, scale};
+
+        // The tooth sheet holds three wing frames; they flap even when the player stands
+        // still. Both entities start together, so the halo follows the wings.
+        for (const int part : {mirror.halo, mirror.sprite}) {
+            world_.ZIndexes[part].Z = ZPlayer;
+            world_.Animations[part].Frames = {0, 1, 2, 1};
+            world_.Animations[part].FrameTime = 0.125f;
+        }
         return;
     }
-    const float blend = std::min(1.f, elapsed_seconds * kCameraResponsiveness);
-    camera_x_ += (target - camera_x_) * blend;
+    case EntityKind::Enemy:
+        mirror.sprite = CreateE(world_);
+        AddEnemyLook(world_, mirror.sprite, entity.type);
+        return;
+    case EntityKind::PlayerShot:
+    case EntityKind::EnemyShot:
+        mirror.sprite = CreateE(world_);
+        if (!AddShotLook(world_, mirror.sprite, entity.type)) {
+            world_.Destroy(mirror.sprite); // no sprite: an area attack, drawn as a ring
+            mirror.sprite = -1;
+        }
+        return;
+    case EntityKind::Item:
+        mirror.sprite = CreateE(world_);
+        AddItemLook(world_, mirror.sprite, entity.type);
+        return;
+    }
+}
+
+/** @brief A new hit on something already shown: its flash, its sound, maybe a shake. */
+void ClientApp::on_hit(Mirror& mirror, const protocol::Entity& entity) {
+    if (entity.kind == config::kPlayerKind) {
+        mirror.flash = kPlayerFlashSeconds;
+        mirror.blink = kPlayerBlinkSeconds;
+        impact_sounds_.player_hit();
+        const auto& lobby = network_.lobby();
+        if (lobby && entity.id == lobby->yourSlot) shake_ = kShakeSeconds;
+    } else if (entity.kind == static_cast<std::uint8_t>(protocol::EntityKind::Enemy)) {
+        mirror.flash = kEnemyFlashSeconds;
+        impact_sounds_.enemy_hit();
+    }
+}
+
+/** @brief The tooth wears its damage: intact at full health, damaged, broken at 1 HP of 3. */
+void ClientApp::set_player_look(Mirror& mirror, const std::uint8_t hp) {
+    const int look = hp >= 100 ? 0 : hp > 34 ? 1 : 2;
+    if (look == mirror.look || mirror.sprite < 0 || mirror.halo < 0) return;
+    mirror.look = look;
+    world_.Sprites[mirror.sprite].TextureId = kToothLooks[look];
+    world_.Sprites[mirror.halo].TextureId = kHaloLooks[look];
+}
+
+void ClientApp::update_impacts(const float elapsed_seconds) {
+    for (auto& [id, mirror] : entities_) {
+        mirror.flash = std::max(0.f, mirror.flash - elapsed_seconds);
+        mirror.blink = std::max(0.f, mirror.blink - elapsed_seconds);
+        if (mirror.sprite < 0) continue;
+        ESprite& look = world_.Sprites[mirror.sprite];
+        if (mirror.kind != config::kPlayerKind) {
+            // An enemy lights up white: its image again, added on top.
+            const auto strength = static_cast<sf::Uint8>(230.f * mirror.flash / kEnemyFlashSeconds);
+            look.Flash = mirror.flash > 0.f ? sf::Color(255, 255, 255, strength) : sf::Color::Transparent;
+            continue;
+        }
+        // A hit player turns red (a tint: added red would not show on a white tooth),
+        // then blinks while the engine protects it.
+        const float red = mirror.flash / kPlayerFlashSeconds; // 1 just hit, 0 back to normal
+        const auto others = static_cast<sf::Uint8>(255.f - 185.f * red);
+        const bool dim = mirror.blink > 0.f && static_cast<int>(mirror.blink * 12.f) % 2 == 0;
+        look.Color = sf::Color(255, others, others, dim ? 70 : 255);
+        if (mirror.halo >= 0) world_.Sprites[mirror.halo].Color.a = dim ? 60 : kHaloOpacity;
+    }
+    shake_ = std::max(0.f, shake_ - elapsed_seconds);
+    if (shake_ > 0.f) {
+        // Our player was hit: the whole game view jolts, less and less.
+        const float amplitude = kShakePixels * shake_ / kShakeSeconds;
+        sf::View view = window_.getView();
+        view.move(amplitude * std::sin(shake_ * 97.f), amplitude * std::cos(shake_ * 71.f));
+        window_.setView(view);
+    }
+}
+
+/** @brief Area attacks have no sprite: a translucent ring shows where they hurt. */
+void ClientApp::draw_area_attacks() {
+    using protocol::EntityKind;
+    for (const auto& entity : network_.entities()) {
+        const auto kind = static_cast<EntityKind>(entity.kind);
+        if (kind != EntityKind::EnemyShot && kind != EntityKind::PlayerShot) continue;
+        const auto pattern = world_.AttackPatterns.find(entity.type);
+        if (pattern == world_.AttackPatterns.end() || pattern->second.TextureId >= 0) continue;
+        const float radius = pattern->second.Radius;
+        sf::CircleShape ring(radius, 48);
+        ring.setOrigin(radius, radius);
+        ring.setPosition(static_cast<float>(entity.x), static_cast<float>(entity.y));
+        ring.setFillColor(sf::Color(255, 90, 90, 55));
+        ring.setOutlineColor(sf::Color(255, 70, 70, 190));
+        ring.setOutlineThickness(-4.f);
+        window_.draw(ring);
+    }
+}
+
+/** @brief An explosion where each enemy or player died, sized to what died. */
+void ClientApp::show_deaths() {
+    for (const protocol::Entity& body : network_.take_deaths()) {
+        sf::Vector2f centre{static_cast<float>(body.x), static_cast<float>(body.y)};
+        float scale = 1.f;
+        if (body.kind == config::kPlayerKind) {
+            centre += {config::kPlayerSize / 2.f, config::kPlayerSize / 2.f};
+        } else if (const auto type = world_.EnemyTypes.find(body.type); type != world_.EnemyTypes.end()) {
+            scale = std::clamp(type->second.Radius / 28.f, 0.8f, 3.2f);
+        }
+        explosions_.spawn(centre, scale);
+    }
 }
 
 /**
  * @brief Draws one complete Parallax background into a render target.
  *
- * Each layer combines the player camera with a time-based automatic distance,
- * then multiplies that total by its configured factor. The background therefore
- * keeps moving while the player is stationary without changing world positions.
+ * Each layer uses only the time-based automatic distance multiplied by its
+ * configured factor. Scrolling speed stays constant regardless of player movement.
  * Two copies are sufficient because every source image is wider than the viewport
  * after scaling; a third copy is drawn defensively for future narrower assets.
  *
@@ -330,21 +528,21 @@ void ClientApp::update_camera(const float elapsed_seconds) {
  * @param textures Four layers, ordered from distant scenery to ground.
  */
 void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
-                                     const std::array<sf::Texture, 4>& textures) {
+                                     const std::array<sf::Texture, 4>& textures,
+                                     const sf::Uint8 opacity) {
     for (std::size_t layer = 0; layer < textures.size(); ++layer) {
         const auto texture_size = textures[layer].getSize();
         const float scale = static_cast<float>(config::kHeight) /
                             static_cast<float>(texture_size.y);
         const float tile_width = static_cast<float>(texture_size.x) * scale;
-        const double scrolling_x =
-            static_cast<double>(camera_x_) + automatic_background_x_;
         float offset = static_cast<float>(std::fmod(
-            scrolling_x * static_cast<double>(background::kParallaxFactors[layer]),
+            automatic_background_x_ * static_cast<double>(background::kParallaxFactors[layer]),
             static_cast<double>(tile_width)));
         if (offset < 0.f) offset += tile_width;
 
         for (int tile = -1; tile <= 1; ++tile) {
             sf::Sprite sprite(textures[layer]);
+            sprite.setColor(sf::Color(255, 255, 255, opacity));
             sprite.setScale(scale, scale);
             sprite.setPosition(static_cast<float>(tile) * tile_width - offset, 0.f);
             target.draw(sprite);
@@ -355,98 +553,109 @@ void ClientApp::draw_parallax_layers(sf::RenderTarget& target,
 /**
  * @brief Draws the current background and the optional day/night crossfade.
  *
- * The incoming four-layer scene is first composited at full opacity in an
- * off-screen texture. Blending that single finished image prevents transparent
- * foreground layers from fading at different apparent speeds.
+ * The incoming layers are blended directly into the window. Keeping rendering
+ * on one target prevents an off-screen OpenGL context from leaking its 1280x720
+ * viewport into a larger fullscreen or maximized window.
  */
 void ClientApp::draw_parallax() {
     draw_parallax_layers(window_, background_textures_);
     if (!ambience_transition_active_) return;
 
-    transition_frame_.clear(sf::Color::Transparent);
-    draw_parallax_layers(transition_frame_, transition_background_textures_);
-    transition_frame_.display();
-
     const float smooth_progress =
         background::day_night_fade_progress(transition_elapsed_seconds_);
-    sf::Sprite transition_sprite(transition_frame_.getTexture());
-    transition_sprite.setColor(sf::Color(
-        255, 255, 255, static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f)));
-    window_.draw(transition_sprite);
+    draw_parallax_layers(
+        window_, transition_background_textures_,
+        static_cast<sf::Uint8>(smooth_progress * 255.f + 0.5f));
 }
 
-/**
- * @brief Draws the pause controls by cropping the pause-menu sprite sheet.
- *
- * Pausing suppresses local input but networking continues, which keeps a
- * multiplayer client connected and allows other players to keep moving.
- */
-void ClientApp::draw_pause_menu() {
-    const auto draw_asset = [&](const sf::IntRect source, const sf::FloatRect target) {
-        sf::Sprite sprite(menu_texture_);
-        sprite.setTextureRect(source);
-        sprite.setPosition(target.left, target.top);
-        sprite.setScale(target.width / static_cast<float>(source.width),
-                        target.height / static_cast<float>(source.height));
-        window_.draw(sprite);
-    };
+/** @brief Hands the HUD the play area as letterboxed in the window, in pixels. */
+void ClientApp::draw_hud() {
+    const auto& lobby = network_.lobby();
+    if (!lobby || !hud_) return;
+    const sf::Vector2f size(window_.getSize());
+    const sf::FloatRect viewport = window_.getView().getViewport();
+    const sf::FloatRect play{viewport.left * size.x, viewport.top * size.y,
+                             viewport.width * size.x, viewport.height * size.y};
+    const float unit = play.height / static_cast<float>(config::kHeight);
+    // The boss of the level, if one is on screen.
+    std::optional<Hud::Boss> boss;
+    for (const auto& entity : network_.entities()) {
+        if (entity.kind != static_cast<std::uint8_t>(protocol::EntityKind::Enemy)) continue;
+        const auto type = world_.EnemyTypes.find(entity.type);
+        if (type != world_.EnemyTypes.end() && type->second.Boss) boss = Hud::Boss{type->second.Name, entity.hp};
+    }
+    hud_->draw(window_, *lobby, network_.entities(), boss, play, play.left + kMenuButton.left * unit);
+}
 
-    // The pause icon remains accessible while playing and closes the overlay too.
-    draw_asset({390, 790, 158, 145}, kMenuButton);
+void ClientApp::draw_results() {
+    const auto& lobby = network_.lobby();
+    if (!lobby) return;
+    const auto mouse = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+    draw_results_screen(window_, pause_gui_, ui_font_, *lobby, mouse, sf::Mouse::isButtonPressed(sf::Mouse::Left));
+}
+
+/** @brief Draws the pause controls using the shared FreeGUI skin. */
+void ClientApp::draw_pause_menu() {
+    const auto mouse = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+    const bool pressed = sf::Mouse::isButtonPressed(sf::Mouse::Left);
+    pause_gui_.icon(window_, {3090, 315, 185, 195}, kMenuButton);
     if (!pause_menu_open_) return;
 
     sf::RectangleShape shade({static_cast<float>(config::kWidth),
                               static_cast<float>(config::kHeight)});
     shade.setFillColor(sf::Color(5, 8, 30, 185));
     window_.draw(shade);
-    sf::RectangleShape panel({640.f, 470.f});
-    panel.setPosition(320.f, 125.f);
-    panel.setFillColor(sf::Color(19, 22, 112, 235));
-    panel.setOutlineThickness(4.f);
-    panel.setOutlineColor(sf::Color(91, 196, 245));
-    window_.draw(panel);
-
-    draw_asset({1080, 250, 350, 130}, kContinueButton);
-    draw_asset({380, 250, 350, 130}, kRestartButton);
-    draw_asset({15, 250, 350, 130}, kLobbyButton);
-    draw_asset(music_enabled_ ? sf::IntRect{380, 520, 350, 130}
-                              : sf::IntRect{15, 520, 350, 130},
-               kMusicButton);
-    draw_asset({390, 790, 158, 145}, kMenuButton);
+    pause_gui_.panel(window_, ui_font_, "Pause", {320.f, 125.f, 640.f, 515.f});
+    pause_gui_.button(window_, ui_font_, kContinueButton, "Continuer", mouse, pressed, true, 1, 32);
+    if (const auto& lobby = network_.lobby()) {
+        pause_gui_.centered(window_, ui_font_, "Lobby : " + lobby->name,
+                            {kLobbyInfo.left, kLobbyInfo.top + 10.f, kLobbyInfo.width, 40.f}, 26);
+        pause_gui_.centered(window_, ui_font_, "Code : " + lobby->code,
+                            {kLobbyInfo.left, kLobbyInfo.top + 58.f, kLobbyInfo.width, 34.f}, 22, style::muted);
+    }
+    pause_gui_.button(window_, ui_font_, kLobbyButton, "Lobby", mouse, pressed, true, 2, 24);
+    pause_gui_.button(window_, ui_font_, kMusicButton,
+                      music_enabled_ ? "Musique : ON" : "Musique : OFF", mouse, pressed,
+                      true, music_enabled_ ? 1 : 2, 18);
+    const bool sound_enabled = UiClickSound::instance().enabled();
+    pause_gui_.button(window_, ui_font_, kClickSoundButton,
+                      sound_enabled ? "Son : ON" : "Son : OFF", mouse, pressed,
+                      true, sound_enabled ? 1 : 2, 20);
+    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 24);
+    if (controls_menu_.open) {
+        controls_menu_.draw(window_, ui_font_, pause_gui_);
+    }
 }
 
 void ClientApp::render() {
+    window_.setActive(true);
+    update_view();
     sync_world();
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);
-    update_camera(elapsed_seconds);
+    update_impacts(elapsed_seconds);
     automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
     window_.clear(sf::Color::Black);
     draw_parallax();
 
-    const float animation_time = animation_clock_.getElapsedTime().asSeconds();
-    for (const auto& [player_id, entity] : entities_) {
-        const auto position = world_.Positions.at(entity).Xy;
-        const auto previous = previous_positions_.find(player_id);
-        const bool position_changed = previous != previous_positions_.end() &&
-            (std::abs(position.x - previous->second.x) > 0.05f ||
-             std::abs(position.y - previous->second.y) > 0.05f);
-        if (position_changed) last_movement_times_[player_id] = animation_time;
-        const auto last_movement = last_movement_times_.find(player_id);
-        const bool moving = last_movement != last_movement_times_.end() &&
-                            animation_time - last_movement->second < 0.12f;
-        const int frame = moving ? 1 + static_cast<int>(animation_time * 8.f) % 2 : 0;
-
-        sf::Sprite tooth(player_texture_);
-        tooth.setTextureRect({frame * kPlayerFrameSize, 0, kPlayerFrameSize, kPlayerFrameSize});
-        const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
-        tooth.setScale(scale, scale);
-        const float offset = (kRenderedPlayerSize - config::kPlayerSize) / 2.f;
-        tooth.setPosition(position.x - camera_x_ - offset, position.y - offset);
-        window_.draw(tooth);
-        previous_positions_[player_id] = position;
+    Animate(world_, elapsed_seconds);
+    Draw(world_, window_);
+    draw_area_attacks();
+    show_deaths();
+    explosions_.update(elapsed_seconds);
+    explosions_.draw(window_);
+    draw_hud();
+    if (network_.is_spectator()) {
+        // Below the HUD row, which may overlay the top of the play area.
+        const sf::FloatRect banner{340.f, 66.f, 600.f, 56.f};
+        pause_gui_.surface(window_, banner);
+        pause_gui_.centered(window_, ui_font_, "Spectateur - tu joueras au prochain niveau", banner, 22);
     }
-    draw_pause_menu();
+    if (results_open_) {
+        draw_results();
+    } else {
+        draw_pause_menu();
+    }
     window_.display();
 }
 

@@ -24,9 +24,17 @@ public:
 
     /** @brief Restarts the click effect to keep rapid clicks responsive. */
     void play() {
+        if (!enabled_) return;
         sound_.stop();
         sound_.play();
     }
+
+    /** @brief Enables or disables UI click effects independently from music. */
+    void set_enabled(const bool enabled) {
+        enabled_ = enabled;
+        if (!enabled_) sound_.stop();
+    }
+    bool enabled() const { return enabled_; }
 
 private:
     UiClickSound() {
@@ -40,6 +48,7 @@ private:
 
     sf::SoundBuffer buffer_;
     sf::Sound sound_;
+    bool enabled_ = true;
 };
 
 } // namespace ntype::client

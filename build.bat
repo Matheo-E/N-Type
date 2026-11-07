@@ -64,6 +64,8 @@ copy /y "build\client-%PRESET%\bin\r-type_client.exe" . >nul
 if errorlevel 1 exit /b 1
 copy /y "build\client-%PRESET%\bin\r-type_server.exe" . >nul
 if errorlevel 1 exit /b 1
+copy /y "build\client-%PRESET%\bin\ntype_sandbox.exe" . >nul
+if errorlevel 1 exit /b 1
 rem Keep the runtime DLLs next to the executables.
 if exist "build\client-%PRESET%\bin\*.dll" copy /y "build\client-%PRESET%\bin\*.dll" . >nul
 if errorlevel 1 exit /b 1

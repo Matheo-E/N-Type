@@ -43,6 +43,9 @@ public:
     int PatternId = -1;
     float Time = 0;                  // seconds since the pattern started
     sf::Vector2f Origin = {0, 0};    // where it started; patterns move relative to it
+    float Heading = 0;               // degrees the pattern is turned by. A bullet's heading is
+                                     // the angle it was fired at, so the same pattern works for
+                                     // every bullet of a fan. 0 for enemies
 };
 
 // ---- Collision ------------------------------------------------------------
@@ -79,38 +82,39 @@ class ESolid {};
 
 // ---- Drawing --------------------------------------------------------------
 
-class ERectangle {
+// What an entity looks like: part of a shared texture (a sprite sheet cell).
+// Only entities with an ESprite are drawn. TextureId is the id from
+// textures.json; -1 means no image. The image itself lives in World::Textures.
+class ESprite {
 public:
-    sf::RectangleShape Rect;
-};
-
-class ECircle {
-public:
-    sf::CircleShape Circle;
-};
-
-class EConvex {
-public:
-    sf::ConvexShape Convex;
-};
-
-// Part of a texture (a sprite sheet cell). The texture itself lives in one
-// shared place, and TextId is its handle.
-class ETextureId {
-public:
-    int TextId = 0;
-    sf::IntRect Source;
+    int TextureId = -1;
+    sf::IntRect Source;  // the cell of the image to show; empty means the whole image
     sf::Vector2f Scale = {1, 1};
+    bool FlipX = false;  // drawn mirrored left-right (for art facing the wrong way)
+    sf::Color Color = sf::Color::White;  // multiplies the image: white keeps it as is, alpha fades it
+    // Added on top of the image (a hit flash): its alpha says how strong; transparent: none.
+    sf::Color Flash = sf::Color::Transparent;
 };
 
+// Plays an animation on the entity's ESprite. The frames of a sprite sheet sit side by side:
+// frame n is the sprite's Source cell moved n cell widths to the right. Frames is the order to
+// play them in, e.g. {0, 1, 2, 1}, looping; each one shows for FrameTime seconds.
 class EAnimation {
 public:
-    int Frame = 0;
-    int FrameCount = 1;
-    float FrameTime = 0.1f;  // seconds per frame
+    std::vector<int> Frames;
+    float FrameTime = 0.1f;
     float Timer = 0;
-    sf::Vector2i FrameSize = {0, 0};  // size of one cell in the sheet
+    std::size_t Step = 0;  // index in Frames of the frame shown now
 };
+
+// Draw order: the entity with the higher Z is painted on top. No EZIndex counts as 0.
+// The layers used by the game (see docs/DRAW_LAYERS.md):
+inline constexpr int ZBackground = -10;
+inline constexpr int ZEnemy = 0;
+inline constexpr int ZBullet = 1;
+inline constexpr int ZPlayer = 2;
+inline constexpr int ZEffect = 3;
+inline constexpr int ZUi = 10;
 
 class EZIndex {
 public:
@@ -147,9 +151,42 @@ public:
     int OId = -1;  // the entity that created this one (a bullet's shooter)
 };
 
-class EPlayer {};
-class EEnemy {};
-class EBullet {};
+// An item lying on the map. ItemId is its type in world.ItemTypes (items.json).
+class EPickup {
+public:
+    int ItemId = -1;
+};
+
+// A player. Move and Shoot are what this player asks for this frame: the local
+// keyboard fills them (ReadKeyboard), or the game sets them, e.g. from a network input.
+class EPlayer {
+public:
+    sf::Vector2f Move = {0, 0};  // each axis -1, 0 or 1
+    bool Shoot = false;
+};
+
+// An enemy. TypeId is its type in world.EnemyTypes (enemies.json).
+class EEnemy {
+public:
+    int TypeId = -1;
+};
+
+// A bullet. PatternId is the attack pattern that fired it (attack_patterns.json).
+class EBullet {
+public:
+    int PatternId = -1;
+};
+
+// Something that died in Collision. The entity is already destroyed when the game reads
+// this, so what the game may need about it is copied here.
+class EDeath {
+public:
+    int Id = -1;
+    int Killer = -1;      // who dealt the last hit: a bullet's shooter, or the body that touched
+    int EnemyType = -1;   // its type in world.EnemyTypes if it was an enemy
+    bool Player = false;  // it was a player
+    sf::Vector2f Position = {0, 0};
+};
 
 // ---- Combat ---------------------------------------------------------------
 
@@ -157,6 +194,7 @@ class EHealth {
 public:
     int Hp = 0;
     int MaxHp = 0;
+    int Hits = 0;  // how many hits hurt it so far (Collision): lets a game show each impact
 };
 
 class EDamage {

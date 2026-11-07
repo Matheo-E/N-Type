@@ -1,39 +1,50 @@
 #include "Server.hpp"
 
 #include <algorithm>
-#include <array>
+#include <cctype>
 #include <iostream>
+#include <random>
+#include <sstream>
+#include <stdexcept>
 #include <thread>
 
-#include "Factory.hpp"
-#include "System.hpp"
+#include "GameConfig.hpp"
 
 namespace ntype::server {
 
 namespace {
 
-using protocol::InputType;
+using protocol::LobbyRefuseReason;
 using protocol::MessageType;
 
 constexpr int kTickRate = 60;
 constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
+constexpr std::uint32_t kStateEvery = 6; // ticks: 10 lobby states per second
 
-constexpr float kMaxY = static_cast<float>(config::kHeight) - config::kPlayerSize;
-
-bool pressed(const std::uint8_t keys, const InputType key) {
-    return (keys & static_cast<std::uint8_t>(key)) != 0;
+GameData load_or_throw(const bool no_enemies) {
+    GameData data;
+    if (no_enemies) {
+        return data;
+    }
+    std::string error;
+    if (!load_game_data(data, NTYPE_ASSET_DIR, error)) {
+        throw std::runtime_error("game data: " + error);
+    }
+    return data;
 }
 
 } // namespace
 
-Server::Server(const std::uint16_t port) : network_(port) {
-    std::cout << "[server] listening on UDP port " << port << std::endl;
+Server::Server(const std::uint16_t port, const bool no_enemies)
+    : data_(load_or_throw(no_enemies)), network_(port), lobbies_(std::random_device{}(), data_) {
+    std::cout << "[server] " << data_.levels.size() << " levels loaded" << std::endl;
+    std::cout << "[server] listening on UDP port " << network_.port() << std::endl;
 }
 
 void Server::run(const std::atomic<bool>& running) {
     const auto step = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<float>(kDt));
-    auto next = Clock::now();
+    Clock::time_point next = Clock::now();
     while (running) {
         tick();
         next += step;
@@ -46,89 +57,177 @@ void Server::tick() {
     for (const auto& datagram : network_.poll()) {
         handle(datagram);
     }
+    if (console_) {
+        for (const auto& line : console_->poll()) {
+            run_command(line);
+        }
+    }
     drop_timed_out();
-    move_players();
-    broadcast_snapshot();
+    const bool send_states = tick_ % kStateEvery == 0;
+    for (auto& [code, lobby] : lobbies_.all()) {
+        if (lobby.phase() == protocol::LobbyPhase::Playing) {
+            lobby.step(kDt);
+            for (const protocol::Entity& body : lobby.take_deaths()) {
+                send_to_members(lobby, protocol::makeEntityDied(body));
+            }
+            for (const auto& part : protocol::makeWorldSnapshots(lobby.next_frame(), lobby.snapshot())) {
+                send_to_members(lobby, part);
+            }
+        }
+        if (send_states) {
+            send_state(lobby);
+        }
+    }
     ++tick_;
 }
 
 void Server::handle(const Datagram& datagram) {
-    const auto packet = protocol::decode(datagram.data);
+    const std::optional<protocol::Packet> packet = protocol::decode(datagram.data);
     if (!packet) {
         return; // Malformed: ignored.
     }
     if (packet->type == MessageType::ConnectRequest) {
-        on_connect(datagram.from);
+        on_connect(datagram.from, packet->text);
         return;
     }
 
-    const auto it = players_.find(datagram.from);
-    if (it == players_.end()) {
+    const auto it = clients_.find(datagram.from);
+    if (it == clients_.end()) {
         return; // Unknown client.
     }
-    Player& player = it->second;
-    player.last_seen = Clock::now();
+    Client& client = it->second;
+    client.last_seen = Clock::now();
 
     switch (packet->type) {
     case MessageType::Input:
-        player.input = packet->value;
+        if (Lobby* lobby = lobbies_.lobby_of(client.id)) {
+            lobby->set_input(client.id, packet->value);
+        }
         break;
     case MessageType::Disconnect:
         remove(datagram.from, "disconnected");
+        break;
+    default:
+        handle_lobby(datagram.from, client, *packet);
+        break;
+    }
+}
+
+// Every request is safe to repeat: the client re-sends it until the lobby
+// state shows its effect.
+void Server::handle_lobby(const asio::ip::udp::endpoint& from, Client& client, const protocol::Packet& packet) {
+    Lobby* lobby = lobbies_.lobby_of(client.id);
+    const auto reply_state = [&](const Lobby& target) {
+        network_.send(from, protocol::makeLobbyState(target.state_for(client.id)));
+    };
+    const auto refuse = [&](const LobbyRefuseReason reason) {
+        network_.send(from, protocol::makeLobbyRefuse(reason));
+    };
+
+    switch (packet.type) {
+    case MessageType::LobbyListRequest:
+        network_.send(from, protocol::makeLobbyList(lobbies_.list()));
+        break;
+    case MessageType::LobbyCreate:
+        if (!lobby) {
+            lobby = lobbies_.create(packet.text);
+            if (!lobby) {
+                refuse(LobbyRefuseReason::TooManyLobbies);
+                return;
+            }
+            lobby->join(client.id, client.name);
+            std::cout << "[server] " << client.name << " created lobby " << lobby->code() << std::endl;
+        }
+        reply_state(*lobby);
+        break;
+    case MessageType::LobbyJoin:
+        if (!lobby) {
+            lobby = lobbies_.find(packet.code);
+            if (!lobby) {
+                refuse(LobbyRefuseReason::NotFound);
+                return;
+            }
+            if (!lobby->join(client.id, client.name)) {
+                refuse(LobbyRefuseReason::Full);
+                return;
+            }
+            std::cout << "[server] " << client.name << " joined lobby " << lobby->code() << std::endl;
+        }
+        reply_state(*lobby);
+        break;
+    case MessageType::LobbyLeave:
+        // Always answered with the list: it tells the client its leave arrived.
+        if (lobby) {
+            lobby->leave(client.id);
+            lobbies_.remove_empty();
+        }
+        network_.send(from, protocol::makeLobbyList(lobbies_.list()));
+        break;
+    case MessageType::LobbyRename:
+    case MessageType::LobbyStart:
+        if (!lobby) {
+            return;
+        }
+        if (packet.type == MessageType::LobbyRename) {
+            lobby->rename(client.id, packet.text);
+        } else {
+            lobby->start(client.id);
+        }
+        reply_state(*lobby);
         break;
     default:
         break; // Server-to-client messages are not expected here.
     }
 }
 
-void Server::on_connect(const asio::ip::udp::endpoint& from) {
+void Server::on_connect(const asio::ip::udp::endpoint& from, const std::string& name) {
     // A repeated ConnectRequest means our ConnectAccept was lost: answer it again.
-    if (const auto it = players_.find(from); it != players_.end()) {
-        network_.send(from, protocol::makeConnectAccept(it->second.id));
+    if (const auto it = clients_.find(from); it != clients_.end()) {
+        it->second.last_seen = Clock::now();
+        network_.send(from, protocol::makeConnectAccept());
         return;
     }
-    if (players_.size() >= config::kMaxPlayers) {
+    if (clients_.size() >= config::kMaxClients) {
         network_.send(from, protocol::makeConnectRefuse(protocol::RefuseReason::ServerFull));
         return;
     }
-
-    // Lowest free id, so each slot keeps its own colour on the client.
-    std::array<bool, config::kMaxPlayers> used{};
-    for (const auto& [endpoint, player] : players_) {
-        used[player.id - 1U] = true;
-    }
-    const auto id = static_cast<std::uint8_t>(std::find(used.begin(), used.end(), false) - used.begin() + 1);
-
-    Player player;
-    player.id = id;
-    player.entity = CreateE(world_);
-    world_.Positions[player.entity].Xy = {100.0F, 150.0F + 120.0F * static_cast<float>(id - 1)};
-    world_.Velocities[player.entity];
-    player.last_seen = Clock::now();
-    players_.emplace(from, player);
-
-    network_.send(from, protocol::makeConnectAccept(id));
-    std::cout << "[server] player " << int(id) << " joined from " << from << std::endl;
+    const Client client{next_id_++, name, Clock::now()};
+    clients_.emplace(from, client);
+    endpoints_.emplace(client.id, from);
+    network_.send(from, protocol::makeConnectAccept());
+    std::cout << "[server] " << name << " connected from " << from << std::endl;
 }
 
 void Server::remove(const asio::ip::udp::endpoint& from, const char* reason) {
-    const auto it = players_.find(from);
-    if (it == players_.end()) {
+    const auto it = clients_.find(from);
+    if (it == clients_.end()) {
         return;
     }
-    const auto id = it->second.id;
-    world_.Positions.erase(it->second.entity);
-    world_.Velocities.erase(it->second.entity);
-    players_.erase(it);
-    broadcast(protocol::makeClientLeft(id));
-    std::cout << "[server] player " << int(id) << ' ' << reason << std::endl;
+    const Client client = it->second;
+    clients_.erase(it);
+    endpoints_.erase(client.id);
+    if (Lobby* lobby = lobbies_.lobby_of(client.id)) {
+        const bool playing = lobby->phase() == protocol::LobbyPhase::Playing;
+        std::uint8_t slot = 0;
+        for (const auto& member : lobby->members()) {
+            if (member.client == client.id) {
+                slot = member.slot;
+            }
+        }
+        lobby->leave(client.id);
+        if (playing) {
+            send_to_members(*lobby, protocol::makeClientLeft(slot));
+        }
+        lobbies_.remove_empty();
+    }
+    std::cout << "[server] " << client.name << ' ' << reason << std::endl;
 }
 
 void Server::drop_timed_out() {
-    const auto now = Clock::now();
+    const Clock::time_point now = Clock::now();
     std::vector<asio::ip::udp::endpoint> expired;
-    for (const auto& [endpoint, player] : players_) {
-        if (now - player.last_seen > kTimeout) {
+    for (const auto& [endpoint, client] : clients_) {
+        if (now - client.last_seen > kTimeout) {
             expired.push_back(endpoint);
         }
     }
@@ -137,52 +236,58 @@ void Server::drop_timed_out() {
     }
 }
 
-void Server::move_players() {
-    for (auto& [endpoint, player] : players_) {
-        float dx = 0.0F;
-        float dy = 0.0F;
-        if (pressed(player.input, InputType::Up)) {
-            dy -= 1.0F;
-        }
-        if (pressed(player.input, InputType::Down)) {
-            dy += 1.0F;
-        }
-        if (pressed(player.input, InputType::Left)) {
-            dx -= 1.0F;
-        }
-        if (pressed(player.input, InputType::Right)) {
-            dx += 1.0F;
-        }
-        world_.Velocities[player.entity].Xy = {dx * config::kPlayerSpeed, dy * config::kPlayerSpeed};
+// Debug commands until levels and game over exist: "level <code>", "gameover <code>".
+void Server::run_command(const std::string& line) {
+    std::istringstream words(line);
+    std::string command;
+    std::string code;
+    words >> command >> code;
+    if (command.empty()) {
+        return; // Blank line.
     }
-    Movement(world_, kDt);
-    for (const auto& [endpoint, player] : players_) {
-        auto& position = world_.Positions[player.entity].Xy;
-        // The level scrolls horizontally: only its explicit starting edge is solid.
-        // There is no implicit right edge tied to the viewport or background width.
-        position.x = std::max(position.x, 0.0F);
-        position.y = std::clamp(position.y, 0.0F, kMaxY);
-    }
-}
-
-void Server::broadcast(const std::vector<std::uint8_t>& data) {
-    for (const auto& [endpoint, player] : players_) {
-        network_.send(endpoint, data);
-    }
-}
-
-void Server::broadcast_snapshot() {
-    if (players_.empty()) {
+    std::transform(code.begin(), code.end(), code.begin(),
+                   [](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    Lobby* lobby = lobbies_.find(code);
+    if ((command != "level" && command != "gameover" && command != "score") || !lobby) {
+        std::cout << "[server] unknown command: " << line
+                  << " (level <code> | gameover <code> | score <code> <slot> <points>)" << std::endl;
         return;
     }
-    // Each player is an entity whose id is its player id.
-    std::vector<protocol::Entity> entities;
-    for (const auto& [endpoint, player] : players_) {
-        const auto& position = world_.Positions[player.entity].Xy;
-        entities.push_back({player.id, config::kPlayerKind, static_cast<std::int32_t>(position.x),
-                            static_cast<std::int32_t>(position.y)});
+    if (command == "score") {
+        // Until enemies exist: gives points by hand to try the score display.
+        unsigned slot = 0;
+        std::uint32_t points = 0;
+        if (!(words >> slot >> points) || slot < 1 || slot > config::kMaxPlayers ||
+            !lobby->add_score(static_cast<std::uint8_t>(slot), points)) {
+            std::cout << "[server] usage: score <code> <slot 1-4 of a member> <points>" << std::endl;
+            return;
+        }
+        std::cout << "[server] slot " << slot << " +" << points << " in " << code << std::endl;
+    } else if (command == "level") {
+        // Skips to the next level (stays on the last one): spectators get a ship.
+        lobby->advance_level();
+        std::cout << "[server] next level in " << code << std::endl;
+    } else {
+        lobby->end_game();
+        std::cout << "[server] game over in " << code << std::endl;
     }
-    broadcast(protocol::makeWorldSnapshot(entities));
+    send_state(*lobby);
+}
+
+void Server::send_state(Lobby& lobby) {
+    for (const auto& member : lobby.members()) {
+        if (const auto it = endpoints_.find(member.client); it != endpoints_.end()) {
+            network_.send(it->second, protocol::makeLobbyState(lobby.state_for(member.client)));
+        }
+    }
+}
+
+void Server::send_to_members(const Lobby& lobby, const std::vector<std::uint8_t>& data) {
+    for (const auto& member : lobby.members()) {
+        if (const auto it = endpoints_.find(member.client); it != endpoints_.end()) {
+            network_.send(it->second, data);
+        }
+    }
 }
 
 } // namespace ntype::server

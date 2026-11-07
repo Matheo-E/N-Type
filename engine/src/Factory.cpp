@@ -1,19 +1,24 @@
 #include "../include/Factory.hpp"
+#include "../include/Math.hpp"
 
 namespace {
 
-// Circles are positioned by their centre, so the position matches the hitbox.
-void AddCircle(World& world, int id, float radius, sf::Color color) {
-    sf::CircleShape& circle = world.Circles[id].Circle;
-    circle.setRadius(radius);
-    circle.setOrigin(radius, radius);
-    circle.setFillColor(color);
+// Texture id from assets/data/textures.json.
+constexpr int TexturePlayers = 1;
+
+ESprite Look(int textureid, sf::IntRect source, float scale, bool flip = false) {
+    ESprite look;
+    look.FlipX = flip;
+    look.TextureId = textureid;
+    look.Source = source;
+    look.Scale = {scale, scale};
+    return look;
 }
 
-void AddRectangle(World& world, int id, float length, float height, sf::Color color) {
-    sf::RectangleShape& rectangle = world.Rectangles[id].Rect;
-    rectangle.setSize({length, height});
-    rectangle.setFillColor(color);
+// Makes the entity visible, on the given draw layer (Z, see Component.hpp).
+void AddSprite(World& world, int id, const ESprite& look, int z) {
+    world.Sprites[id] = look;
+    world.ZIndexes[id].Z = z;
 }
 
 void AddHurtbox(World& world, int id, float radius, sf::Vector2f offset) {
@@ -30,6 +35,16 @@ void SetLayer(World& world, int id, int layer, int mask) {
     world.Layers[id].Mask = mask;
 }
 
+// The sprite of an enemy or item type, with its animation if it has one.
+template <class Data>
+void AddLook(World& world, int id, const Data& data, int z) {
+    AddSprite(world, id, Look(data.TextureId, data.Source, data.Scale, data.FlipX), z);
+    if (!data.AnimationFrames.empty()) {
+        world.Animations[id].Frames = data.AnimationFrames;
+        world.Animations[id].FrameTime = data.AnimationFrameTime;
+    }
+}
+
 // An enemy only gets a Spawner / Flight component if its data asks for one.
 void AddEnemyPatterns(World& world, int id, const EnemyData& data, sf::Vector2f pos) {
     if (data.AttackPatternId >= 0) {
@@ -40,17 +55,6 @@ void AddEnemyPatterns(World& world, int id, const EnemyData& data, sf::Vector2f 
         world.Flights[id].PatternId = data.FlightPatternId;
         world.Flights[id].Origin = pos;
     }
-}
-
-// A sprite if the enemy type has a texture, otherwise a plain circle.
-void AddEnemyLook(World& world, int id, const EnemyData& data) {
-    if (data.TextureId < 0) {
-        AddCircle(world, id, data.Radius, data.Color);
-        return;
-    }
-    world.TextureIds[id].TextId = data.TextureId;
-    world.TextureIds[id].Source = data.Source;
-    world.TextureIds[id].Scale = {data.Scale, data.Scale};
 }
 
 }  // namespace
@@ -68,11 +72,11 @@ int CreateEPlayer(World& world, sf::Vector2f pos) {
     world.Speeds[id].Value = 200.0f;
     world.Healths[id].Hp = 3;
     world.Healths[id].MaxHp = 3;
-    world.Spawners[id].Interval = 0.15f;  // pattern 0: fires straight up while Space is held
+    world.Spawners[id].Interval = 0.15f;  // its attack pattern 0 is the player's shot
     world.Spawners[id].PatternId = 0;
-    AddRectangle(world, id, 32.0f, 32.0f, sf::Color::Green);
+    AddSprite(world, id, Look(TexturePlayers, {67, 2, 32, 15}, 2.0f), ZPlayer);
     // Bullet hell: the part that can be hit is much smaller than the sprite.
-    AddHurtbox(world, id, 3.0f, {16.0f, 16.0f});
+    AddHurtbox(world, id, 3.0f, {0.0f, 0.0f});
     SetLayer(world, id, LayerPlayer, 0);
     return id;
 }
@@ -85,7 +89,7 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     const EnemyData& data = type->second;
     int id = CreateE(world);
 
-    world.Enemies.emplace(id, EEnemy{});
+    world.Enemies.emplace(id, EEnemy{enemyid});
     world.Names[id].Name = data.Name;
     world.Positions[id].Xy = pos;
     world.Velocities[id];
@@ -93,27 +97,52 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     world.Healths[id].Hp = data.Hp;
     world.Healths[id].MaxHp = data.Hp;
     AddEnemyPatterns(world, id, data, pos);
-    AddEnemyLook(world, id, data);
+    AddLook(world, id, data, ZEnemy);
     AddHurtbox(world, id, data.Radius, {0.0f, 0.0f});
+    if (data.ContactDamage > 0) {  // touching it hurts the player (its layer mask already targets the player)
+        AddHitbox(world, id, data.Radius);
+        world.Damages[id].Dmg = data.ContactDamage;
+    }
     SetLayer(world, id, LayerEnemy, LayerPlayer);
     return id;
 }
 
-// One bullet, fired by spawnerid. It starts at the spawner and gets a default
-// velocity: the pattern system overrides it with the bullet's real direction.
+// One bullet, fired by spawnerid. Everything about the bullet (speed, damage, size,
+// lifetime, look) comes from the attack pattern stored in the spawner. It starts at the
+// spawner and flies along the pattern's angle: a system that fires a fan or a ring
+// overrides the velocity for each bullet. Returns -1 (nothing is created) if the
+// spawner has no attack pattern, or the pattern is unknown.
 int CreateEBullet(World& world, int spawnerid) {
+    auto spawner = world.Spawners.find(spawnerid);
+    if (spawner == world.Spawners.end()) {
+        return -1;
+    }
+    auto found = world.AttackPatterns.find(spawner->second.PatternId);
+    if (found == world.AttackPatterns.end()) {
+        return -1;
+    }
+    const AttackPattern& pattern = found->second;
     const bool fromplayer = world.Players.count(spawnerid) > 0;
-    auto spawner = world.Positions.find(spawnerid);
+    auto where = world.Positions.find(spawnerid);
     int id = CreateE(world);
 
-    world.Bullets.emplace(id, EBullet{});
-    world.Positions[id].Xy = (spawner != world.Positions.end()) ? spawner->second.Xy : sf::Vector2f(0, 0);
-    world.Velocities[id].Xy = fromplayer ? sf::Vector2f(0, -600) : sf::Vector2f(0, 150);
+    world.Bullets.emplace(id, EBullet{spawner->second.PatternId});
+    world.Positions[id].Xy = where != world.Positions.end() ? where->second.Xy : sf::Vector2f(0, 0);
+    world.Velocities[id].Xy = Direction(pattern.AngleDegrees) * pattern.Speed;
     world.OwnerIds[id].OId = spawnerid;
-    world.Damages[id].Dmg = 1;
-    world.Lifetimes[id].Lifetime = 10.0f;
-    AddCircle(world, id, 4.0f, sf::Color::White);
-    AddHitbox(world, id, 4.0f);
+    auto stats = world.Stats.find(spawnerid);  // the shooter's Attack adds to its bullets
+    world.Damages[id].Dmg = pattern.Damage + (stats != world.Stats.end() ? stats->second.Attack : 0);
+    world.Lifetimes[id].Lifetime = pattern.Lifetime;
+    if (pattern.FlightPatternId >= 0) {  // the bullet follows a flight pattern, turned to its own angle
+        world.Speeds[id].Value = pattern.Speed;
+        world.Flights[id].PatternId = pattern.FlightPatternId;
+        world.Flights[id].Origin = world.Positions[id].Xy;
+        world.Flights[id].Heading = pattern.AngleDegrees;
+    }
+    if (pattern.TextureId >= 0) {
+        AddLook(world, id, pattern, ZBullet);
+    }
+    AddHitbox(world, id, pattern.Radius);
     SetLayer(world, id, fromplayer ? LayerPlayerBullet : LayerEnemyBullet,
              fromplayer ? LayerEnemy : LayerPlayer);
     return id;
@@ -133,4 +162,57 @@ int CreateEStatic(World& world, sf::Vector2f pos) {
     int id = CreateE(world);
     world.Positions[id].Xy = pos;
     return id;
+}
+
+int CreateEItem(World& world, sf::Vector2f pos, int itemid) {
+    auto type = world.ItemTypes.find(itemid);
+    if (type == world.ItemTypes.end()) {
+        return -1;
+    }
+    const ItemData& data = type->second;
+    int id = CreateE(world);
+
+    world.Pickups[id].ItemId = itemid;
+    world.Names[id].Name = data.Name;
+    world.Positions[id].Xy = pos;
+    world.Velocities[id];
+    world.Speeds[id].Value = data.Speed;
+    // A hurtbox to be touched, but no collision layer: bullets ignore it and it hurts nobody.
+    AddHurtbox(world, id, data.Radius, {0.0f, 0.0f});
+    AddLook(world, id, data, ZEnemy);
+    if (data.FlightPatternId >= 0) {
+        world.Flights[id].PatternId = data.FlightPatternId;
+        world.Flights[id].Origin = pos;
+    }
+    if (data.Lifetime > 0.0f) {
+        world.Lifetimes[id].Lifetime = data.Lifetime;
+    }
+    return id;
+}
+
+bool AddEnemyLook(World& world, int id, int enemyid) {
+    auto type = world.EnemyTypes.find(enemyid);
+    if (type == world.EnemyTypes.end()) {
+        return false;
+    }
+    AddLook(world, id, type->second, ZEnemy);
+    return true;
+}
+
+bool AddShotLook(World& world, int id, int patternid) {
+    auto pattern = world.AttackPatterns.find(patternid);
+    if (pattern == world.AttackPatterns.end() || pattern->second.TextureId < 0) {
+        return false;
+    }
+    AddLook(world, id, pattern->second, ZBullet);
+    return true;
+}
+
+bool AddItemLook(World& world, int id, int itemid) {
+    auto type = world.ItemTypes.find(itemid);
+    if (type == world.ItemTypes.end()) {
+        return false;
+    }
+    AddLook(world, id, type->second, ZEnemy);
+    return true;
 }
