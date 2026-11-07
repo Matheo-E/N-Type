@@ -19,6 +19,7 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
         }
     }
     window.clear(sf::Color::Black);
+    world.Actions.Update(world.Keys);
     MoveInput(world, playerid);
     Movement(world, dt);
     Draw(world, window);
@@ -33,10 +34,10 @@ void MoveInput(World& world, int playerid) {
     }
 
     sf::Vector2f dir = {0.0f, 0.0f};
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Z)) { dir.y -= 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) { dir.y += 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) { dir.x -= 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) { dir.x += 1.0f; }
+    if (world.Actions.IsDown(Action::MoveUp)) { dir.y -= 1.0f; }
+    if (world.Actions.IsDown(Action::MoveDown)) { dir.y += 1.0f; }
+    if (world.Actions.IsDown(Action::MoveLeft)) { dir.x -= 1.0f; }
+    if (world.Actions.IsDown(Action::MoveRight)) { dir.x += 1.0f; }
 
     // No key held: dir is still {0, 0}, so the velocity becomes {0, 0}.
     const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);

@@ -10,6 +10,7 @@ find_package(nlohmann_json 3 REQUIRED)
 add_executable(ntype
   src/main.cpp
   engine/src/System.cpp
+  engine/src/Input.cpp
   engine/src/Factory.cpp
   engine/src/Loader.cpp)
 target_link_libraries(ntype PRIVATE sfml-graphics sfml-window sfml-system nlohmann_json::nlohmann_json)

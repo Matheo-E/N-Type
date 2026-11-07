@@ -4,12 +4,16 @@
 
 #include "Component.hpp"
 #include "EnemyData.hpp"
+#include "Input.hpp"
 #include "AllTextures.hpp"
 
 // One map per component type, keyed by entity id.
 class World {
 public:
     int NextId = 0;
+
+    KeyMap Keys;       // which physical key each Key reads (see Input.hpp)
+    ActionMap Actions; // which Key each action uses
 
     // Loaded definitions (not per-entity, so not touched by Destroy).
     std::unordered_map<int, EnemyData> EnemyTypes;
