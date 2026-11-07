@@ -4,9 +4,10 @@
 
 namespace {
 
-constexpr float CullMargin = 64.0f;  // how far outside the window things survive
 constexpr float HitInvincibility = 1.0f;  // seconds of protection after the player is hit
 
+// Do the hitbox of one entity and the hurtbox of another overlap? Both are circles
+// centred on the entity's position plus their Offset.
 bool Touching(World& world, int hitid, int hurtid) {
     auto hitpos = world.Positions.find(hitid);
     auto hurtpos = world.Positions.find(hurtid);
@@ -20,8 +21,9 @@ bool Touching(World& world, int hitid, int hurtid) {
     return delta.x * delta.x + delta.y * delta.y <= reach * reach;
 }
 
-// Applies one hit. Entities to destroy are only noted: they are removed after
-// the loops, because removing them now would break the iteration.
+// Applies one hit: the bullet is used up, and the target loses health unless it is
+// protected. Entities to remove are only noted in `dead`: removing them now would break
+// the loops that are still walking the maps.
 void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
     if (world.Bullets.count(hitid) > 0) {
         dead.push_back(hitid);
@@ -39,16 +41,11 @@ void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
     }
 }
 
-void DestroyAll(World& world, const std::vector<int>& dead) {
-    for (int id : dead) {
-        world.Destroy(id);
-    }
-}
-
 }  // namespace
 
-// Every hitbox against every hurtbox it may hit (its Mask against their Layer).
-// Simple and slow: with thousands of bullets this needs a spatial index.
+// Every hitbox against every hurtbox it may hit: the hitbox owner's Mask must contain the
+// hurtbox owner's Layer (so enemy bullets only hurt the player, and the player's only hurt
+// enemies). Simple and slow: with thousands of bullets this wants a spatial index.
 void Collision(World& world) {
     std::vector<int> dead;
     for (auto& [hitid, hitbox] : world.Hitboxes) {
@@ -69,35 +66,7 @@ void Collision(World& world) {
             }
         }
     }
-    DestroyAll(world, dead);
-}
-
-void Timers(World& world, float dt) {
-    std::vector<int> dead;
-    for (auto& [id, life] : world.Lifetimes) {
-        life.Lifetime -= dt;
-        if (life.Lifetime <= 0) {
-            dead.push_back(id);
-        }
+    for (int id : dead) {
+        world.Destroy(id);
     }
-    for (auto it = world.Invincibles.begin(); it != world.Invincibles.end();) {
-        it->second.Time -= dt;
-        it = it->second.Time <= 0 ? world.Invincibles.erase(it) : std::next(it);
-    }
-    DestroyAll(world, dead);
-}
-
-void Cull(World& world) {
-    std::vector<int> dead;
-    for (auto& [id, pos] : world.Positions) {
-        if (world.Bullets.count(id) == 0 && world.Enemies.count(id) == 0) {
-            continue;
-        }
-        const sf::Vector2f p = pos.Xy;
-        if (p.x < -CullMargin || p.x > WindowWidth + CullMargin ||
-            p.y < -CullMargin || p.y > WindowHeight + CullMargin) {
-            dead.push_back(id);
-        }
-    }
-    DestroyAll(world, dead);
 }

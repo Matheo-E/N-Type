@@ -63,14 +63,12 @@ private:
     ClientNetwork network_;
     sf::RenderWindow& window_;
     WindowState& window_state_;
-    sf::Texture player_texture_;
     sf::Font ui_font_;
     GuiSkin pause_gui_;
     ControlsMenu controls_menu_;
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
     std::array<sf::Texture, 4> transition_background_textures_;
-    sf::Clock animation_clock_;
     sf::Clock frame_clock_;
     double automatic_background_x_ = 0.0;
     bool pause_menu_open_ = false;

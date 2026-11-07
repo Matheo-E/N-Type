@@ -11,6 +11,7 @@
 #include <SFML/OpenGL.hpp>
 
 #include "Factory.hpp"
+#include "Loader.hpp"
 #include "BackgroundConfig.hpp"
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
@@ -23,10 +24,9 @@ namespace {
 
 const std::array<const char*, config::kMaxPlayers> kColorNames{"blue", "orange", "green", "pink"};
 
+constexpr int kPlayerTexture = 1;  // id of sprites/player/tooth.png in assets/data/textures.json
 constexpr int kPlayerFrameSize = 724;
 constexpr float kRenderedPlayerSize = 88.f;
-constexpr float kPlayerAnimationSpeed = 8.f;
-constexpr int kPlayerAnimationFrames[] = {0, 1, 2, 1};
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
 const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
 const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
@@ -62,9 +62,8 @@ ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, const 
     : name_(name), network_(host, port), window_(window), window_state_(window_state),
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
-    const std::string player_path = asset_dir + "/sprites/player/tooth.png";
-    if (!player_texture_.loadFromFile(player_path))
-        throw std::runtime_error("Unable to load player sprite: " + player_path);
+    if (!LoadTextures(world_, asset_dir))
+        throw std::runtime_error("Unable to load the textures listed in assets/data/textures.json");
     if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
     if (!pause_gui_.buttons.loadFromFile(asset_dir + "/FreeGUI/png/Button.png") ||
         !pause_gui_.windows.loadFromFile(asset_dir + "/FreeGUI/png/Window.png"))
@@ -296,8 +295,7 @@ void ClientApp::sync_world() {
     for (auto it = entities_.begin(); it != entities_.end();) {
         const auto id = it->first;
         if (std::none_of(players.begin(), players.end(), [id](const auto& player) { return player.id == id; })) {
-            world_.Positions.erase(it->second);
-            world_.Rectangles.erase(it->second);
+            world_.Destroy(it->second);
             it = entities_.erase(it);
         } else {
             ++it;
@@ -307,9 +305,20 @@ void ClientApp::sync_world() {
         auto [it, added] = entities_.try_emplace(player.id, 0);
         if (added) {
             it->second = CreateE(world_);
+            // The tooth sheet holds three wing frames; they flap even when the player stands still.
+            ESprite& look = world_.Sprites[it->second];
+            look.TextureId = kPlayerTexture;
+            look.Source = {0, 0, kPlayerFrameSize, kPlayerFrameSize};
+            const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
+            look.Scale = {scale, scale};
+            world_.ZIndexes[it->second].Z = ZPlayer;
+            world_.Animations[it->second].Frames = {0, 1, 2, 1};
+            world_.Animations[it->second].FrameTime = 0.125f;
         }
-        // The server is authoritative: positions are copied, never simulated here.
-        world_.Positions[it->second].Xy = {static_cast<float>(player.x), static_cast<float>(player.y)};
+        // The server is authoritative: positions are copied, never simulated here. The server
+        // gives the corner of the player's box; the engine draws sprites around their centre.
+        world_.Positions[it->second].Xy = {static_cast<float>(player.x) + config::kPlayerSize / 2.f,
+                                           static_cast<float>(player.y) + config::kPlayerSize / 2.f};
     }
 }
 
@@ -403,20 +412,8 @@ void ClientApp::render() {
     window_.clear(sf::Color::Black);
     draw_parallax();
 
-    // The wings keep flapping even when server positions do not change.
-    const float animation_time = animation_clock_.getElapsedTime().asSeconds();
-    const int animation_step = static_cast<int>(animation_time * kPlayerAnimationSpeed) % 4;
-    const int frame = kPlayerAnimationFrames[animation_step];
-    for (const auto& [player_id, entity] : entities_) {
-        const auto position = world_.Positions.at(entity).Xy;
-        sf::Sprite tooth(player_texture_);
-        tooth.setTextureRect({frame * kPlayerFrameSize, 0, kPlayerFrameSize, kPlayerFrameSize});
-        const float scale = kRenderedPlayerSize / static_cast<float>(kPlayerFrameSize);
-        tooth.setScale(scale, scale);
-        const float offset = (kRenderedPlayerSize - config::kPlayerSize) / 2.f;
-        tooth.setPosition(position.x - offset, position.y - offset);
-        window_.draw(tooth);
-    }
+    Animate(world_, elapsed_seconds);
+    Draw(world_, window_);
     draw_pause_menu();
     window_.display();
 }

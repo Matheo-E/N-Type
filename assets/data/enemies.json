@@ -1,642 +1,160 @@
 {
   "enemies": [
     {
-      "id": 11,
+      "id": 1,
       "name": "chomper",
-      "level": 1,
-      "role": "melee",
       "hp": 10,
-      "radius": 23,
-      "color": [
-        110,
-        210,
-        255
-      ],
-      "speed": 80,
       "contact_damage": 1,
-      "score": 100,
+      "radius": 23,
+      "speed": 80,
       "fire_interval": 0,
       "attack_pattern": -1,
+      "flight_pattern": 1,
+      "sprite": { "texture": 2, "rect": [0,  0,  724,  724], "scale": 0.099448, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Melee. Chases the player and deals 1 contact damage. No ranged attack. Worth 100 points."
+    },
+    {
+      "id": 2,
+      "name": "smice",
+      "hp": 8,
+      "contact_damage": 1,
+      "radius": 20,
+      "speed": 50,
+      "fire_interval": 1.8,
+      "attack_pattern": 1,
+      "flight_pattern": 2,
+      "sprite": { "texture": 3, "rect": [0,  0,  724,  724], "scale": 0.088398, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Ranged. Drifts slowly left across the screen. Every 1.8 s it winds up for 0.35 s, then fires 1 projectile aimed at the player (damage 1, speed 220, radius 7, lives 8 s). 1 contact damage. Worth 150 points."
+    },
+    {
+      "id": 3,
+      "name": "pigice",
+      "hp": 13,
+      "contact_damage": 1,
+      "radius": 34,
+      "speed": 30,
+      "fire_interval": 3.2,
+      "attack_pattern": 2,
+      "flight_pattern": 2,
+      "sprite": { "texture": 5, "rect": [0,  0,  724,  724], "scale": 0.143646, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Area. Drifts slowly left. Every 3.2 s it telegraphs for 0.8 s, then releases an expanding ring (radius 110, lasts 0.4 s, damage 1). 1 contact damage. Worth 250 points."
+    },
+    {
+      "id": 4,
+      "name": "theice",
+      "hp": 200,
+      "contact_damage": 2,
+      "radius": 82,
+      "speed": 0,
+      "fire_interval": 4.5,
+      "attack_pattern": 3,
       "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_01_ice/ice_chomper.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.099448
-      },
-      "movement": {
-        "type": "chase_player"
-      },
-      "attacks": []
+      "sprite": { "texture": 6, "rect": [0,  0,  724,  724], "scale": 0.331492, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Boss. Stays still on the right of the screen. Alternates two attacks: a beam sweeping left (every 8 s, 1.3 s telegraph, damage 2, width 96, lasts 1.8 s) and a burst of 12 projectiles in all directions (every 4.5 s, 0.8 s telegraph, damage 1, speed 170, radius 24). Below 50% HP it enrages: attack intervals x0.75 and projectiles 10% faster. 2 contact damage. Worth 2500 points."
+    },
+    {
+      "id": 5,
+      "name": "wrapped",
+      "hp": 15,
+      "contact_damage": 1,
+      "radius": 24,
+      "speed": 80,
+      "fire_interval": 0,
+      "attack_pattern": -1,
+      "flight_pattern": 1,
+      "sprite": { "texture": 8, "rect": [0,  0,  1024,  1536], "scale": 0.0625, "flip_x": true },
+      "description": "Melee. Chases the player and deals 1 contact damage. No ranged attack. Worth 150 points."
+    },
+    {
+      "id": 6,
+      "name": "jellybean",
+      "hp": 12,
+      "contact_damage": 1,
+      "radius": 23,
+      "speed": 50,
+      "fire_interval": 1.4,
+      "attack_pattern": 4,
+      "flight_pattern": 2,
+      "sprite": { "texture": 9, "rect": [0,  0,  724,  724], "scale": 0.099448, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Ranged. Drifts slowly left. Every 1.4 s it winds up for 0.35 s, then fires 1 projectile aimed at the player (damage 1, speed 260, radius 8, lives 8 s). 1 contact damage. Worth 225 points."
+    },
+    {
+      "id": 7,
+      "name": "gummyworm",
+      "hp": 20,
+      "contact_damage": 1,
+      "radius": 36,
+      "speed": 30,
+      "fire_interval": 2.8,
+      "attack_pattern": 5,
+      "flight_pattern": 2,
+      "sprite": { "texture": 11, "rect": [0,  0,  724,  724], "scale": 0.154696, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Area. Drifts slowly left. Every 2.8 s it telegraphs for 0.9 s, then releases an expanding ring (radius 140, lasts 0.4 s, damage 1). 1 contact damage. Worth 375 points."
+    },
+    {
+      "id": 8,
+      "name": "candybear",
+      "hp": 250,
+      "contact_damage": 2,
+      "radius": 88,
+      "speed": 0,
+      "fire_interval": 3.4,
+      "attack_pattern": 6,
+      "flight_pattern": -1,
+      "sprite": { "texture": 12, "rect": [0,  0,  724,  724], "scale": 0.353591, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Boss. Stays still on the right of the screen. Every 3.4 s, after a 1.1 s telegraph, it fires a fan of 3 projectiles aimed at the player over a 36 degree spread (damage 2, speed 230, radius 36, lives 8 s). Below 50% HP it enrages: intervals x0.7 and projectiles 15% faster. 2 contact damage. Worth 4000 points."
+    },
+    {
+      "id": 9,
+      "name": "psyring",
+      "hp": 18,
+      "contact_damage": 2,
+      "radius": 22,
+      "speed": 80,
+      "fire_interval": 0,
+      "attack_pattern": -1,
+      "flight_pattern": 1,
+      "sprite": { "texture": 14, "rect": [0, 0, 2172, 724], "scale": 0.0405, "flip_x": true },
+      "description": "Melee. Chases the player and deals 2 contact damage. No ranged attack. Worth 225 points."
+    },
+    {
+      "id": 10,
+      "name": "evilmask",
+      "hp": 20,
+      "contact_damage": 2,
+      "radius": 25,
+      "speed": 50,
+      "fire_interval": 1.1,
+      "attack_pattern": 7,
+      "flight_pattern": 2,
+      "sprite": { "texture": 15, "rect": [0,  0,  724,  724], "scale": 0.110497, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Ranged. Drifts slowly left. Every 1.1 s it winds up for 0.35 s, then fires 1 projectile aimed at the player (damage 2, speed 300, radius 9, lives 8 s). 2 contact damage. Worth 325 points."
+    },
+    {
+      "id": 11,
+      "name": "denturesk",
+      "hp": 30,
+      "contact_damage": 2,
+      "radius": 38,
+      "speed": 20,
+      "fire_interval": 2.4,
+      "attack_pattern": 8,
+      "flight_pattern": 2,
+      "sprite": { "texture": 17, "rect": [0,  0,  724,  724], "scale": 0.165746, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Area. Drifts slowly left. Every 2.4 s it telegraphs for 1.0 s, then releases an expanding ring (radius 175, lasts 0.4 s, damage 2). 2 contact damage. Worth 550 points."
     },
     {
       "id": 12,
-      "name": "smice",
-      "level": 1,
-      "role": "ranged",
-      "hp": 8,
-      "radius": 20,
-      "color": [
-        110,
-        210,
-        255
-      ],
-      "speed": 50,
-      "contact_damage": 1,
-      "score": 150,
-      "fire_interval": 1.8,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_01_ice/small_ice_enemy.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.088398
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "aimed_projectile",
-          "interval": 1.8,
-          "telegraph": 0.35,
-          "count": 1,
-          "spread_degrees": 0,
-          "projectile": {
-            "damage": 1,
-            "speed": 220,
-            "radius": 7,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_01_ice/ice_arrow.png",
-              "rect": [
-                0,
-                0,
-                2172,
-                724
-              ],
-              "scale": 0.030387
-            },
-            "flip_x": true
-          }
-        }
-      ]
-    },
-    {
-      "id": 13,
-      "name": "pigice",
-      "level": 1,
-      "role": "area",
-      "hp": 13,
-      "radius": 34,
-      "color": [
-        110,
-        210,
-        255
-      ],
-      "speed": 30,
-      "contact_damage": 1,
-      "score": 250,
-      "fire_interval": 3.2,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_01_ice/large_ice_enemy.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.143646
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "area_pulse",
-          "interval": 3.2,
-          "telegraph": 0.8,
-          "damage": 1,
-          "radius": 110,
-          "duration": 0.4,
-          "visual": "expanding_ring"
-        }
-      ]
-    },
-    {
-      "id": 14,
-      "name": "theice",
-      "level": 1,
-      "role": "boss",
-      "hp": 200,
-      "radius": 82,
-      "color": [
-        110,
-        210,
-        255
-      ],
-      "speed": 0,
-      "contact_damage": 2,
-      "score": 2500,
-      "fire_interval": 8.0,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_01_ice/ice_monster.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.331492
-      },
-      "movement": {
-        "type": "stationary",
-        "spawn": [
-          1100,
-          360
-        ]
-      },
-      "attacks": [
-        {
-          "type": "center_beam",
-          "interval": 8.0,
-          "telegraph": 1.3,
-          "damage": 2,
-          "origin": [
-            1280,
-            360
-          ],
-          "direction": [
-            -1,
-            0
-          ],
-          "length": 1280,
-          "width": 96,
-          "duration": 1.8,
-          "sprite": {
-            "texture": "sprites/enemies/level_01_ice/ice_beam.png",
-            "rect": [
-              0,
-              0,
-              2172,
-              724
-            ],
-            "scale": 0.132597
-          },
-          "flip_x": true
-        },
-        {
-          "type": "radial_burst",
-          "interval": 4.5,
-          "telegraph": 0.8,
-          "count": 12,
-          "spread_degrees": 360,
-          "projectile": {
-            "damage": 1,
-            "speed": 170,
-            "radius": 24,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_01_ice/spiked_ice_ball.png",
-              "rect": [
-                0,
-                0,
-                1312,
-                1199
-              ],
-              "scale": 0.06005
-            },
-            "flip_x": true
-          }
-        }
-      ],
-      "attack_schedule": "alternate",
-      "enrage": {
-        "hp_ratio": 0.5,
-        "interval_multiplier": 0.75,
-        "projectile_speed_multiplier": 1.1
-      }
-    },
-    {
-      "id": 21,
-      "name": "wrapped",
-      "level": 2,
-      "role": "melee",
-      "hp": 15,
-      "radius": 24,
-      "color": [
-        255,
-        125,
-        185
-      ],
-      "speed": 80,
-      "contact_damage": 1,
-      "score": 150,
-      "fire_interval": 0,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_02_candy/wrapped_candy.png",
-        "rect": [
-          0,
-          0,
-          1024,
-          1536
-        ],
-        "scale": 0.0625
-      },
-      "movement": {
-        "type": "chase_player"
-      },
-      "attacks": []
-    },
-    {
-      "id": 22,
-      "name": "jellybean",
-      "level": 2,
-      "role": "ranged",
-      "hp": 12,
-      "radius": 23,
-      "color": [
-        255,
-        125,
-        185
-      ],
-      "speed": 50,
-      "contact_damage": 1,
-      "score": 225,
-      "fire_interval": 1.4,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_02_candy/jelly_bean.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.099448
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "aimed_projectile",
-          "interval": 1.4,
-          "telegraph": 0.35,
-          "count": 1,
-          "spread_degrees": 0,
-          "projectile": {
-            "damage": 1,
-            "speed": 260,
-            "radius": 8,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_02_candy/candy_blob_projectile.png",
-              "rect": [
-                0,
-                0,
-                1536,
-                1024
-              ],
-              "scale": 0.021484
-            },
-            "flip_x": true
-          }
-        }
-      ]
-    },
-    {
-      "id": 23,
-      "name": "gummyworm",
-      "level": 2,
-      "role": "area",
-      "hp": 20,
-      "radius": 36,
-      "color": [
-        255,
-        125,
-        185
-      ],
-      "speed": 30,
-      "contact_damage": 1,
-      "score": 375,
-      "fire_interval": 2.8,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_02_candy/gummy_worm.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.154696
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "area_pulse",
-          "interval": 2.8,
-          "telegraph": 0.9,
-          "damage": 1,
-          "radius": 140,
-          "duration": 0.4,
-          "visual": "expanding_ring"
-        }
-      ]
-    },
-    {
-      "id": 24,
-      "name": "candybear",
-      "level": 2,
-      "role": "boss",
-      "hp": 250,
-      "radius": 88,
-      "color": [
-        255,
-        125,
-        185
-      ],
-      "speed": 0,
-      "contact_damage": 2,
-      "score": 4000,
-      "fire_interval": 3.4,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_02_candy/candy_boss.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.353591
-      },
-      "movement": {
-        "type": "stationary",
-        "spawn": [
-          1100,
-          360
-        ]
-      },
-      "attacks": [
-        {
-          "type": "aimed_fan",
-          "interval": 3.4,
-          "telegraph": 1.1,
-          "count": 3,
-          "spread_degrees": 36,
-          "projectile": {
-            "damage": 2,
-            "speed": 230,
-            "radius": 36,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_02_candy/candy_boss_fist.png",
-              "rect": [
-                0,
-                0,
-                1672,
-                941
-              ],
-              "scale": 0.119022
-            },
-            "flip_x": true
-          }
-        }
-      ],
-      "enrage": {
-        "hp_ratio": 0.5,
-        "interval_multiplier": 0.7,
-        "projectile_speed_multiplier": 1.15
-      }
-    },
-    {
-      "id": 31,
-      "name": "psyring",
-      "level": 3,
-      "role": "melee",
-      "hp": 18,
-      "radius": 22,
-      "color": [
-        155,
-        225,
-        100
-      ],
-      "speed": 80,
-      "contact_damage": 2,
-      "score": 225,
-      "fire_interval": 0,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_03_dentist_lab/syringe.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.121547
-      },
-      "movement": {
-        "type": "chase_player"
-      },
-      "attacks": []
-    },
-    {
-      "id": 32,
-      "name": "evilmask",
-      "level": 3,
-      "role": "ranged",
-      "hp": 20,
-      "radius": 25,
-      "color": [
-        155,
-        225,
-        100
-      ],
-      "speed": 50,
-      "contact_damage": 2,
-      "score": 325,
-      "fire_interval": 1.1,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_03_dentist_lab/evil_mask.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.110497
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "aimed_projectile",
-          "interval": 1.1,
-          "telegraph": 0.35,
-          "count": 1,
-          "spread_degrees": 0,
-          "projectile": {
-            "damage": 2,
-            "speed": 300,
-            "radius": 9,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_03_dentist_lab/toxic_blob.png",
-              "rect": [
-                0,
-                0,
-                2172,
-                724
-              ],
-              "scale": 0.035912
-            },
-            "flip_x": true
-          }
-        }
-      ]
-    },
-    {
-      "id": 33,
-      "name": "denturesk",
-      "level": 3,
-      "role": "area",
-      "hp": 30,
-      "radius": 38,
-      "color": [
-        155,
-        225,
-        100
-      ],
-      "speed": 20,
-      "contact_damage": 2,
-      "score": 550,
-      "fire_interval": 2.4,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_03_dentist_lab/evil_dentures.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.165746
-      },
-      "movement": {
-        "type": "advance_left"
-      },
-      "attacks": [
-        {
-          "type": "area_pulse",
-          "interval": 2.4,
-          "telegraph": 1.0,
-          "damage": 2,
-          "radius": 175,
-          "duration": 0.4,
-          "visual": "expanding_ring"
-        }
-      ]
-    },
-    {
-      "id": 34,
       "name": "carry",
-      "level": 3,
-      "role": "boss",
       "hp": 500,
-      "radius": 74,
-      "color": [
-        155,
-        225,
-        100
-      ],
-      "speed": 100,
       "contact_damage": 2,
-      "score": 10000,
+      "radius": 74,
+      "speed": 100,
       "fire_interval": 2.8,
-      "attack_pattern": -1,
-      "flight_pattern": -1,
-      "sprite": {
-        "texture": "sprites/enemies/level_03_dentist_lab/infected_tooth.png",
-        "rect": [
-          0,
-          0,
-          724,
-          724
-        ],
-        "scale": 0.320442
-      },
-      "movement": {
-        "type": "vertical_patrol",
-        "spawn": [
-          1100,
-          360
-        ],
-        "x": 1100,
-        "min_y": 140,
-        "max_y": 580
-      },
-      "attacks": [
-        {
-          "type": "aimed_fan",
-          "interval": 2.8,
-          "telegraph": 1.2,
-          "count": 1,
-          "spread_degrees": 0,
-          "projectile": {
-            "damage": 9999,
-            "speed": 360,
-            "radius": 14,
-            "lifetime": 8.0,
-            "sprite": {
-              "texture": "sprites/enemies/level_03_dentist_lab/infected_tooth_projectile.png",
-              "rect": [
-                0,
-                0,
-                724,
-                724
-              ],
-              "scale": 0.066298
-            },
-            "flip_x": true,
-            "one_shot": true
-          }
-        }
-      ],
-      "enrage": {
-        "hp_ratio": 0.4,
-        "interval_multiplier": 0.65,
-        "projectile_speed_multiplier": 1.15,
-        "projectile_count": 3,
-        "spread_degrees": 30
-      }
+      "attack_pattern": 9,
+      "flight_pattern": 3,
+      "sprite": { "texture": 18, "rect": [0,  0,  724,  724], "scale": 0.320442, "flip_x": true, "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.125 } },
+      "description": "Boss. Patrols up and down on the right of the screen (between y=140 and y=580). Every 2.8 s, after a 1.2 s telegraph, it fires 1 aimed projectile that kills instantly (damage 9999, speed 360, radius 14, single shot). Below 40% HP it enrages: intervals x0.65, projectiles 15% faster, and it fires 3 projectiles over a 30 degree spread. 2 contact damage. Worth 10000 points."
     }
   ]
 }

@@ -32,6 +32,7 @@ add_library(ntype_engine STATIC
     engine/src/Behaviour.cpp
     engine/src/Combat.cpp
     engine/src/Factory.cpp
+    engine/src/Input.cpp
     engine/src/Loader.cpp
     engine/src/System.cpp
 )

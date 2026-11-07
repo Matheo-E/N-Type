@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 void CreateGame(sf::RenderWindow& window, sf::String name) {
     window.create(sf::VideoMode(WindowWidth, WindowHeight), name);
@@ -16,16 +18,17 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
             window.close();
         }
     }
-    dt = std::min(dt, 0.05f);  // a long stall (window drag) must not teleport things
+    dt = std::min(dt, 0.05f);  // a long stall (dragging the window) must not teleport things
     window.clear(sf::Color::Black);
+    world.Actions.Update(world.Keys);
     MoveInput(world, playerid);
-    Flight(world, dt);
-    Follow(world);
-    Spawner(world, dt);
+    Spawner(world, dt, playerid);  // before Flight, so new bullets start on their flight pattern
+    Flight(world, dt, playerid);
     Movement(world, dt);
     Collision(world);
     Timers(world, dt);
     Cull(world);
+    Animate(world, dt);
     Draw(world, window);
     window.display();
 }
@@ -38,10 +41,10 @@ void MoveInput(World& world, int playerid) {
     }
 
     sf::Vector2f dir = {0.0f, 0.0f};
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Z)) { dir.y -= 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) { dir.y += 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) { dir.x -= 1.0f; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) { dir.x += 1.0f; }
+    if (world.Actions.IsDown(Action::MoveUp)) { dir.y -= 1.0f; }
+    if (world.Actions.IsDown(Action::MoveDown)) { dir.y += 1.0f; }
+    if (world.Actions.IsDown(Action::MoveLeft)) { dir.x -= 1.0f; }
+    if (world.Actions.IsDown(Action::MoveRight)) { dir.x += 1.0f; }
 
     // No key held: dir is still {0, 0}, so the velocity becomes {0, 0}.
     const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
@@ -62,44 +65,59 @@ void Movement(World& world, float dt) {
 
 namespace {
 
-// Sprites are drawn around their position, like circles.
-void DrawSprites(World& world, sf::RenderWindow& window) {
-    for (auto& [id, look] : world.TextureIds) {
-        auto pos = world.Positions.find(id);
-        auto texture = world.Textures.find(look.TextId);
-        if (pos == world.Positions.end() || texture == world.Textures.end()) {
-            continue;
-        }
-        sf::Sprite sprite(texture->second);
-        if (look.Source.width > 0 && look.Source.height > 0) {
-            sprite.setTextureRect(look.Source);
-        }
-        const sf::FloatRect bounds = sprite.getLocalBounds();
-        sprite.setOrigin(bounds.width / 2, bounds.height / 2);
-        sprite.setScale(look.Scale);
-        sprite.setPosition(pos->second.Xy);
-        window.draw(sprite);
+int ZOf(World& world, int id) {
+    auto z = world.ZIndexes.find(id);
+    return z != world.ZIndexes.end() ? z->second.Z : 0;
+}
+
+void DrawSprite(World& world, sf::RenderWindow& window, int id) {
+    const ESprite& look = world.Sprites.at(id);
+    auto pos = world.Positions.find(id);
+    auto texture = world.Textures.find(look.TextureId);
+    if (pos == world.Positions.end() || texture == world.Textures.end()) {
+        return;
     }
+    sf::Sprite sprite(texture->second.Image);
+    if (look.Source.width > 0 && look.Source.height > 0) {
+        sf::IntRect cell = look.Source;
+        auto animation = world.Animations.find(id);
+        if (animation != world.Animations.end() && !animation->second.Frames.empty()) {
+            cell.left += animation->second.Frames[animation->second.Step] * cell.width;
+        }
+        sprite.setTextureRect(cell);
+    }
+    const sf::FloatRect bounds = sprite.getLocalBounds();
+    sprite.setOrigin(bounds.width / 2, bounds.height / 2);  // the position is the centre
+    sprite.setScale(look.FlipX ? -look.Scale.x : look.Scale.x, look.Scale.y);
+    sprite.setPosition(pos->second.Xy);
+    window.draw(sprite);
 }
 
 }  // namespace
 
-// Order: sprites, then rectangles, then circles (bullets end up on top).
+// Draws every entity that has an ESprite, lowest EZIndex first (ties: lowest id).
 void Draw(World& world, sf::RenderWindow& window) {
-    DrawSprites(world, window);
-    for (auto& [id, rect] : world.Rectangles) {
-        auto it = world.Positions.find(id);
-        if (it != world.Positions.end()) {
-            rect.Rect.setPosition(it->second.Xy);
-            window.draw(rect.Rect);
-        }
+    std::vector<int> order;
+    for (auto& [id, look] : world.Sprites) {
+        order.push_back(id);
     }
-    for (auto& [id, circle] : world.Circles) {
-        auto it = world.Positions.find(id);
-        if (it != world.Positions.end()) {
-            circle.Circle.setPosition(it->second.Xy);
-            window.draw(circle.Circle);
-        }
+    std::sort(order.begin(), order.end(), [&world](int a, int b) {
+        return std::make_pair(ZOf(world, a), a) < std::make_pair(ZOf(world, b), b);
+    });
+    for (int id : order) {
+        DrawSprite(world, window, id);
     }
 }
 
+void Animate(World& world, float dt) {
+    for (auto& [id, animation] : world.Animations) {
+        if (animation.Frames.empty() || animation.FrameTime <= 0.0f) {
+            continue;
+        }
+        animation.Timer += dt;
+        while (animation.Timer >= animation.FrameTime) {
+            animation.Timer -= animation.FrameTime;
+            animation.Step = (animation.Step + 1) % animation.Frames.size();
+        }
+    }
+}
