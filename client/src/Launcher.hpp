@@ -1,11 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
+#include <memory>
 #include <string>
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
+#include "ClientNetwork.hpp"
 #include "WindowState.hpp"
 
 namespace ntype::client {
@@ -18,15 +19,27 @@ struct ConnectionSettings {
     bool click_sound_enabled = true;
 };
 
+/** @brief Where the launcher opens. */
+enum class LauncherStart {
+    Title,       // First launch: title screen, then the connection form.
+    Lobbies,     // The player left a game: the lobby list.
+    WaitingRoom, // The game ended and the lobby is waiting again.
+};
+
 /**
- * @brief Displays the title and connection screens, or returns to the main menu.
+ * @brief Runs the menus until the player's lobby starts playing, or the window closes.
+ *
+ * The session is created by the connection page and kept across the menus and
+ * the game, because lobby membership belongs to that connection.
+ *
  * @param window Shared application window reused by the lobby and game.
  * @param window_state Window preferences retained across all screens.
- * @param defaults Values retained from the previous session.
- * @param open_browser If true, skips the connection form when returning from a game.
+ * @param settings Connection values and sound preferences, updated by the menus.
+ * @param session The server session; created, replaced or dropped by the menus.
+ * @param start Page shown first.
+ * @return true when the lobby is playing and the game should be shown.
  */
-std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, WindowState& window_state,
-                                                const ConnectionSettings& defaults,
-                                                bool open_browser = false);
+bool show_launcher(sf::RenderWindow& window, WindowState& window_state, ConnectionSettings& settings,
+                   std::unique_ptr<ClientNetwork>& session, LauncherStart start = LauncherStart::Title);
 
 } // namespace ntype::client

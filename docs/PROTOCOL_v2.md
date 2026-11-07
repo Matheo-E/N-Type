@@ -20,6 +20,8 @@ Every message begins with **1 byte identifying its type**, followed by the field
 | `uint8_t` | 1 byte | Number from 0 to 255 |
 | `uint16_t` | 2 bytes | Unsigned ID, stored **little-endian** |
 | `int32_t` | 4 bytes | Signed world position, stored **little-endian** |
+| `str` | 1 + length bytes | One `uint8_t` length, then that many ASCII bytes from 32 to 126 (printable). Never empty |
+| `code` | 4 bytes | Room code: 4 characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`, no length byte |
 
 **Little-endian** means the lower byte is written first. For example, entity ID `251` is encoded as `FB 00` (hexadecimal). Each UDP datagram contains **one complete message**. There is no additional protocol header or version number in this MVP.
 
@@ -27,8 +29,8 @@ Every message begins with **1 byte identifying its type**, followed by the field
 
 | ID | Name | Direction | Payload after type | Total size |
 | ---: | --- | --- | --- | ---: |
-| 1 | `ConnectRequest` | Client → Server | None | 1 byte |
-| 2 | `ConnectAccept` | Server → Client | `playerId` (`uint8_t`) | 2 bytes |
+| 1 | `ConnectRequest` | Client → Server | `name` (`str`, 1–16) | variable |
+| 2 | `ConnectAccept` | Server → Client | None | 1 byte |
 | 3 | `ConnectRefuse` | Server → Client | `reason` (`uint8_t`) | 2 bytes |
 | 4 | `Disconnect` | Client → Server | None | 1 byte |
 | 5 | `Input` | Client → Server | `keys` (`uint8_t`) | 2 bytes |
@@ -39,17 +41,27 @@ Every message begins with **1 byte identifying its type**, followed by the field
 | 10 | `PlayerEvent` | Server → Client | `playerId`, `event` (`uint8_t` each) | 3 bytes |
 | 11 | `ClientLeft` | Server → Client | `playerId` (`uint8_t`) | 2 bytes |
 | 12 | `GameStateChange` | Server → Client | `state` (`uint8_t`) | 2 bytes |
+| 13 | `LobbyListRequest` | Client → Server | None | 1 byte |
+| 14 | `LobbyList` | Server → Client | `count` (`uint8_t`, ≤ 32), then per lobby: `code`, `name` (`str`, 1–24), `members` (1–4), `state` (`uint8_t` each) | variable |
+| 15 | `LobbyCreate` | Client → Server | `name` (`str`, 1–24) | variable |
+| 16 | `LobbyJoin` | Client → Server | `code` | 5 bytes |
+| 17 | `LobbyRefuse` | Server → Client | `reason` (`uint8_t`) | 2 bytes |
+| 18 | `LobbyLeave` | Client → Server | None | 1 byte |
+| 19 | `LobbyState` | Server → Client | `code`, `name` (`str`, 1–24), `state`, `yourSlot`, `leaderSlot`, `count` (1–4) (`uint8_t` each), then per member: `slot` (1–4), `role` (`uint8_t` each), `name` (`str`, 1–16) | variable |
+| 20 | `LobbyRename` | Client → Server | `name` (`str`, 1–24) | variable |
+| 21 | `LobbyStart` | Client → Server | None | 1 byte |
 
 `EntitySpawn` fields are: `id` (2 bytes), `kind` (1 byte), `x` (4 bytes), `y` (4 bytes). A `WorldSnapshot` entity uses the **same 11-byte layout**, without the message type.
 
 ## 3. Values used in messages
 
-### Player IDs and connection
+### Connection
 
-- `ConnectRequest` asks the server to join the game.
-- `ConnectAccept` returns a **player ID from 1 to 4**.
-- `ConnectRefuse` returns `1` for **ServerFull** or `2` for **ServerError**.
-- `Disconnect` is sent when a client leaves normally. `ClientLeft` tells other clients that a player has left.
+- `ConnectRequest` carries the player's name and asks the server to accept the client. It is repeated every 500 ms until answered.
+- `ConnectAccept` has no payload. Player IDs (1–4) are **lobby slots**, given by `LobbyState`.
+- `ConnectRefuse` returns `1` for **ServerFull** (the server already holds 128 clients) or `2` for **ServerError**.
+- `Disconnect` is sent when a client leaves normally. `ClientLeft` tells the other members of a playing lobby that a player (slot) has left.
+- `Input` is sent every frame on every screen and is also the heartbeat: a client silent for 5 s is dropped. Its keys only move a player of a running game.
 
 ### Player inputs
 
@@ -91,6 +103,26 @@ The decoder currently accepts the following numeric values. Their meanings are *
 | 2 | Dead | 2 | Playing |
 | 3 | Respawn | 3 | Game over |
 
+### Lobbies
+
+One server hosts up to 32 lobbies; each lobby runs its own game for up to 4 members.
+
+- `LobbyRefuse.reason`: `1` NotFound (no lobby with this code), `2` Full (4 members), `3` TooManyLobbies.
+- Lobby `state`: `1` Waiting, `2` Playing (same values as `GameStateChange`).
+- Member `role`: `1` Player, `2` Spectator (joined during a game; becomes a player at the next level or when the lobby returns to waiting).
+- There is no map choice: the game plays map N at level N.
+- `LobbyState` is built for each recipient: `yourSlot` is the slot of the member who receives it. The leader is the member present the longest.
+- Picking a lobby from the list sends `LobbyJoin` with its code.
+- `WorldSnapshot` is sent every tick to the members of each playing lobby only; entity IDs are the lobby slots.
+
+**Reliability: the state is re-sent, requests are repeated.** There are no acknowledgements:
+
+- While browsing, the client sends `LobbyListRequest` every second; the server answers with the whole `LobbyList`.
+- The server sends every lobby member its `LobbyState` 10 times per second, and once right after each request.
+- The client repeats each request (`LobbyCreate`, `LobbyJoin`, `LobbyRename`, `LobbyStart`) every 250 ms until a `LobbyState` shows its effect, or until `LobbyRefuse` arrives.
+- `LobbyLeave` is repeated until a `LobbyList` arrives: the server always answers it with the list.
+- Every request is safe to repeat. A member sending `LobbyCreate` or `LobbyJoin` gets its current lobby's state back. Requests from non-leaders, or invalid in the lobby's state, are ignored: the next `LobbyState` shows nothing changed.
+
 ## 4. Example: moving and shooting
 
 1. The player holds **Right** and **Shoot**.
@@ -129,7 +161,7 @@ if (packet && packet->type == protocol::MessageType::Input) {
 
 ## 6. Validation and current limits
 
-The decoder rejects unknown message types, wrong lengths, invalid input bits, invalid player IDs where checked, invalid entity kinds, and snapshots containing more than 100 entities. The packet-building functions do **not** all check their arguments, so callers must use valid values.
+The decoder rejects unknown message types, wrong lengths, invalid input bits, invalid player IDs where checked, invalid entity kinds, snapshots containing more than 100 entities, empty, too long or non-printable strings, invalid room codes, lists of more than 32 lobbies and lobby states with 0 or more than 4 members. The string, code and lobby builders throw `std::invalid_argument` on invalid values; the other builders do **not** check their arguments, so callers must use valid values.
 
 **Not handled by this protocol module:** UDP socket management, retransmission of lost messages, ordering of delayed messages, authentication, and recovery from a lost spawn/destroy event. These are integration concerns for the network/gameplay team. UDP does not guarantee delivery or order; sending snapshots periodically can help refresh positions, but does not replace a complete reliability strategy.
 
@@ -147,7 +179,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -I. \
 Expected output:
 
 ```text
-All 12 protocol messages passed!
+All 22 protocol messages passed!
 ```
 
 **Before integration:** agree on message directions, event/state meanings, entity IDs, and when the server sends `EntityUpdate` versus `WorldSnapshot`.

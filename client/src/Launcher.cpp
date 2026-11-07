@@ -4,13 +4,15 @@
 
 #include <algorithm>
 #include <array>
-#include <asio.hpp>
 #include <charconv>
 #include <cmath>
 #include <filesystem>
+#include <cctype>
+#include <memory>
 #include <optional>
+#include <stdexcept>
+#include <string_view>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <SFML/Audio/Music.hpp>
@@ -113,77 +115,22 @@ sf::FloatRect current_view_bounds(const sf::RenderWindow& window) {
     return {center.x - size.x / 2.f, center.y - size.y / 2.f, size.x, size.y};
 }
 
-bool server_is_reachable(const std::string& host, const std::uint16_t port, std::string& error) {
-    using namespace std::chrono_literals;
-    asio::io_context io;
-    std::error_code network_error;
-    asio::ip::udp::resolver resolver(io);
-    const auto endpoints = resolver.resolve(asio::ip::udp::v4(), host, std::to_string(port), network_error);
-    if (network_error || endpoints.empty()) {
-        error = "Host not found. Check the host name or IP address.";
-        return false;
-    }
-    const auto server = endpoints.begin()->endpoint();
-    asio::ip::udp::socket socket(io);
-    socket.open(asio::ip::udp::v4(), network_error);
-    if (!network_error) socket.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), 0), network_error);
-    if (!network_error) socket.non_blocking(true, network_error);
-    if (network_error) {
-        error = "Unable to open the network connection.";
-        return false;
-    }
-
-    const auto request = protocol::makeConnectRequest();
-    const auto deadline = std::chrono::steady_clock::now() + 2s;
-    auto next_send = std::chrono::steady_clock::time_point{};
-    while (std::chrono::steady_clock::now() < deadline) {
-        const auto now = std::chrono::steady_clock::now();
-        if (now >= next_send) {
-            socket.send_to(asio::buffer(request), server, 0, network_error);
-            // A closed UDP port may report connection_refused. It is an expected
-            // validation result, not an exception that should close the UI.
-            if (network_error && network_error != asio::error::connection_refused) break;
-            network_error.clear();
-            next_send = now + 400ms;
-        }
-        std::array<std::uint8_t, 1500> bytes{};
-        asio::ip::udp::endpoint from;
-        const auto size = socket.receive_from(asio::buffer(bytes), from, 0, network_error);
-        if (!network_error && from == server) {
-            const auto packet = protocol::decode(
-                {bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(size)});
-            if (packet && packet->type == protocol::MessageType::ConnectAccept) {
-                const auto disconnect = protocol::makeDisconnect();
-                socket.send_to(asio::buffer(disconnect), server, 0, network_error);
-                error.clear();
-                return true;
-            }
-            if (packet && packet->type == protocol::MessageType::ConnectRefuse) {
-                error = "The server is full. Please choose another lobby.";
-                return false;
-            }
-        }
-        if (network_error != asio::error::would_block && network_error != asio::error::try_again &&
-            network_error != asio::error::connection_refused) {
-            break;
-        }
-        network_error.clear();
-        std::this_thread::sleep_for(20ms);
-    }
-    error = "No server answered on " + host + ":" + std::to_string(port) + ".";
-    return false;
+std::string truncated(const std::string& text, const std::size_t limit) {
+    return text.size() > limit ? text.substr(0, limit - 3) + "..." : text;
 }
+
+// Same order as the player ids 1 to 4: blue, orange, green, pink.
+const std::array<sf::Color, 4> kPlayerColors{
+    sf::Color(66, 135, 245), sf::Color(245, 150, 40), sf::Color(80, 190, 90), sf::Color(240, 110, 180)};
 
 } // namespace
 
-std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, WindowState& window_state,
-                                                const ConnectionSettings& defaults,
-                                                const bool open_browser) {
+bool show_launcher(sf::RenderWindow& window, WindowState& window_state, ConnectionSettings& settings,
+                   std::unique_ptr<ClientNetwork>& session, const LauncherStart start) {
     auto font = load_font();
-    if (!font) return std::nullopt;
+    if (!font) throw std::runtime_error("Unable to load the UI font");
     auto& click_sound = UiClickSound::instance();
-    click_sound.set_enabled(defaults.click_sound_enabled);
-    bool music_enabled = defaults.music_enabled;
+    click_sound.set_enabled(settings.click_sound_enabled);
     const std::string assets = NTYPE_ASSET_DIR;
     sf::Texture lobby_background, title_background, game_logo;
     GuiSkin gui;
@@ -194,7 +141,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
         !game_logo.loadFromFile(assets + "/sprites/La Contre-Attaque de M. Jean-cive.png") ||
         !gui.buttons.loadFromFile(assets + "/FreeGUI/png/Button.png") ||
         !gui.windows.loadFromFile(assets + "/FreeGUI/png/Window.png"))
-        return std::nullopt;
+        throw std::runtime_error("Unable to load the launcher assets");
     for (auto* texture : {&lobby_background, &title_background, &game_logo,
                           &gui.buttons, &gui.windows})
         texture->setSmooth(true);
@@ -202,30 +149,29 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     if (music.openFromFile(assets + "/audio/music/lobby.mp3")) {
         music.setLoop(true);
         music.setVolume(40.f);
-        if (music_enabled) music.play();
+        if (settings.music_enabled) music.play();
     }
     window_state.open(window, "N-Type");
     update_launcher_view(window);
 
     enum class Page { Title, Connection, Home, Lobbies, Create, Waiting };
-    Page page = open_browser ? Page::Home : Page::Title;
-    struct Lobby { std::string name; unsigned size; };
-    std::vector<Lobby> lobbies;
-    std::size_t selected_lobby = 0;
+    Page page = Page::Title;
+    if (session && start != LauncherStart::Title)
+        page = session->phase() == Phase::InLobby ? Page::Waiting : Page::Lobbies;
+    std::string selected_code;
     std::size_t first_visible_lobby = 0;
     constexpr std::size_t visible_lobbies = 3;
     std::array<Field, 3> fields{{
-        {"Nom", defaults.name, {210.f, 110.f, 265.f, 46.f}},
-        {"Host", defaults.host, {210.f, 172.f, 265.f, 46.f}},
-        {"Port", std::to_string(defaults.port), {210.f, 234.f, 265.f, 46.f}},
+        {"Nom", settings.name, {210.f, 110.f, 265.f, 46.f}},
+        {"Host", settings.host, {210.f, 172.f, 265.f, 46.f}},
+        {"Port", std::to_string(settings.port), {210.f, 234.f, 265.f, 46.f}},
     }};
-    Field lobby_field{"Nom du lobby", "My lobby", {200.f, 119.f, 275.f, 46.f}};
-    std::string player_name = defaults.name;
-    std::string host = defaults.host;
-    std::uint16_t port = defaults.port;
-    std::string lobby_name;
-    unsigned lobby_size = 4;
-    unsigned current_players = 1;
+    Field lobby_field{"Nom du lobby", "", {200.f, 119.f, 275.f, 46.f}};
+    Field code_field{"Code", "", {80.f, 307.f, 92.f, 52.f}};
+    Field rename_field{"Nom du lobby", "", {110.f, 98.f, 340.f, 38.f}};
+    bool code_focused = false;
+    bool renaming = false;
+    bool solo_pending = false; // "Play solo": start the lobby as soon as it exists.
     std::size_t active = 0;
     bool settings_open = false;
     ControlsMenu controls_menu;
@@ -236,22 +182,39 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
     const sf::FloatRect join_button{85.f, 118.f, 215.f, 58.f};
     const sf::FloatRect create_button{85.f, 198.f, 215.f, 58.f};
     const sf::FloatRect solo_button{85.f, 278.f, 215.f, 58.f};
-    const sf::FloatRect join_selected{181.f, 307.f, 198.f, 52.f};
-    const sf::FloatRect decrease{200.f, 207.f, 57.f, 47.f};
-    const sf::FloatRect increase{418.f, 207.f, 57.f, 47.f};
+    const sf::FloatRect join_code{177.f, 307.f, 58.f, 52.f};
+    const sf::FloatRect join_selected{250.f, 307.f, 225.f, 52.f};
     const sf::FloatRect make_lobby{175.f, 294.f, 210.f, 57.f};
-    const sf::FloatRect enter_game{155.f, 292.f, 250.f, 58.f};
+    const sf::FloatRect start_game{155.f, 292.f, 250.f, 58.f};
+    const sf::FloatRect lobby_title{80.f, 98.f, 400.f, 38.f};
     const sf::FloatRect back_button{15.f, 12.f, 43.f, 43.f};
     const sf::FloatRect settings_button{502.f, 12.f, 43.f, 43.f};
     const sf::FloatRect music_toggle{170.f, 151.f, 220.f, 55.f};
     const sf::FloatRect click_toggle{170.f, 220.f, 220.f, 55.f};
     const sf::FloatRect controls_button{170.f, 287.f, 220.f, 55.f};
+
+    const auto busy = [&]() { return session && session->busy(); };
+    const auto lobby_row = [](const std::size_t row) {
+        return sf::FloatRect{90.f, 119.f + static_cast<float>(row) * 56.f, 380.f, 49.f};
+    };
     const auto go_back = [&]() {
-        if (page == Page::Home) page = Page::Connection;
-        else if (page == Page::Connection) page = Page::Title;
-        else if (page == Page::Waiting) page = Page::Lobbies;
-        else page = Page::Home;
         error.clear();
+        if (session) session->clear_error();
+        solo_pending = false;
+        renaming = false;
+        code_focused = false;
+        if (page == Page::Waiting) {
+            session->leave();
+            page = Page::Lobbies;
+        } else if (page == Page::Lobbies || page == Page::Create) {
+            page = Page::Home;
+        } else if (page == Page::Home) {
+            session.reset(); // Disconnects from the server.
+            page = Page::Connection;
+        } else if (page == Page::Connection) {
+            session.reset();
+            page = Page::Title;
+        }
     };
     const auto connect = [&]() {
         unsigned parsed = 0;
@@ -263,15 +226,37 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             error = "Renseigne ton nom, le host et un port valide.";
             return;
         }
-        player_name = fields[0].value;
-        host = fields[1].value;
-        port = static_cast<std::uint16_t>(parsed);
-        page = Page::Home;
+        if (!is_valid_name(fields[0].value)) {
+            error = "Le pseudo fait 1 a 16 caracteres, sans accents.";
+            return;
+        }
+        settings.name = fields[0].value;
+        settings.host = fields[1].value;
+        settings.port = static_cast<std::uint16_t>(parsed);
         error.clear();
+        session.reset(); // Drops a previous attempt.
+        try {
+            session = std::make_unique<ClientNetwork>(settings.host, settings.port, settings.name);
+        } catch (const std::exception&) {
+            error = "Host introuvable : " + settings.host;
+        }
+        // The page changes once the server accepts us (see the session follow-up below).
     };
-    const auto launch_game = [&]() -> std::optional<ConnectionSettings> {
-        if (!server_is_reachable(host, port, error)) return std::nullopt;
-        return ConnectionSettings{player_name, host, port, music_enabled, click_sound.enabled()};
+    const auto create_lobby = [&](const std::string& name) {
+        if (!session || busy() || name.find_first_not_of(' ') == std::string::npos) return;
+        error.clear();
+        session->create(name);
+    };
+    const auto join_by_code = [&]() {
+        if (!session || busy() || code_field.value.size() != protocol::kCodeLength) return;
+        error.clear();
+        session->join(code_field.value);
+    };
+    const auto rename_lobby = [&]() {
+        renaming = false;
+        const auto& lobby = session->lobby();
+        if (lobby && !rename_field.value.empty() && rename_field.value != lobby->name)
+            session->rename(rename_field.value);
     };
     const auto draw_field = [&](const Field& field, bool focused) {
         gui.surface(window, field.bounds, true);
@@ -294,7 +279,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             }
         }
         value.setFillColor(field.value.empty() ? style::muted : style::ink);
-        position_ui_text(window, value, field.bounds.left + 13.f, field.bounds.top + 11.f);
+        position_ui_text(window, value, field.bounds.left + 13.f,
+                         field.bounds.top + (field.bounds.height - 24.f) / 2.f);
         window.draw(value);
     };
 
@@ -307,6 +293,7 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             if (event.type == sf::Event::Closed) window.close();
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
                 if (settings_open) settings_open = false;
+                else if (renaming) renaming = false;
                 else if (page == Page::Title) window.close();
                 else go_back();
             }
@@ -316,7 +303,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             }
             if (event.type == sf::Event::Resized) update_launcher_view(window);
             if (event.type == sf::Event::MouseWheelScrolled && page == Page::Lobbies && !settings_open) {
-                if (event.mouseWheelScroll.delta < 0 && first_visible_lobby + visible_lobbies < lobbies.size())
+                const std::size_t count = session ? session->lobbies().size() : 0;
+                if (event.mouseWheelScroll.delta < 0 && first_visible_lobby + visible_lobbies < count)
                     ++first_visible_lobby;
                 else if (event.mouseWheelScroll.delta > 0 && first_visible_lobby > 0)
                     --first_visible_lobby;
@@ -341,8 +329,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
                         controls_menu.open = true;
                     } else if (music_toggle.contains(point)) {
                         click_sound.play();
-                        music_enabled = !music_enabled;
-                        if (music_enabled) music.play(); else music.pause();
+                        settings.music_enabled = !settings.music_enabled;
+                        if (settings.music_enabled) music.play(); else music.pause();
                     } else if (click_toggle.contains(point)) {
                         click_sound.play();
                         click_sound.set_enabled(!click_sound.enabled());
@@ -361,52 +349,56 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
                         click_sound.play();
                         connect();
                     }
-                } else if (page == Page::Home) {
+                } else if (page == Page::Home && !busy()) {
                     if (join_button.contains(point)) {
                         click_sound.play();
+                        session->clear_error();
                         page = Page::Lobbies;
                     } else if (create_button.contains(point)) {
                         click_sound.play();
+                        session->clear_error();
+                        lobby_field.value = truncated(settings.name + "'s lobby", protocol::kMaxLobbyName);
                         page = Page::Create;
                     } else if (solo_button.contains(point)) {
                         click_sound.play();
-                        if (auto result = launch_game()) return result;
+                        solo_pending = true;
+                        create_lobby(truncated(settings.name + " (solo)", protocol::kMaxLobbyName));
                     }
                 } else if (page == Page::Lobbies) {
+                    const auto& lobbies = session->lobbies();
                     for (std::size_t row = 0; row < visible_lobbies && first_visible_lobby + row < lobbies.size(); ++row) {
-                        const sf::FloatRect bounds{90.f, 119.f + static_cast<float>(row) * 56.f, 380.f, 49.f};
-                        if (bounds.contains(point)) {
+                        if (lobby_row(row).contains(point)) {
                             click_sound.play();
-                            selected_lobby = first_visible_lobby + row;
+                            selected_code = lobbies[first_visible_lobby + row].code;
                         }
                     }
-                    if (!lobbies.empty() && join_selected.contains(point)) {
+                    code_focused = code_field.bounds.contains(point);
+                    if (join_code.contains(point) && code_field.value.size() == protocol::kCodeLength) {
                         click_sound.play();
-                        lobby_name = lobbies[selected_lobby].name;
-                        lobby_size = lobbies[selected_lobby].size;
-                        current_players = 1;
-                        page = Page::Waiting;
+                        join_by_code();
+                    }
+                    if (!selected_code.empty() && join_selected.contains(point) && !busy()) {
+                        click_sound.play();
+                        error.clear();
+                        session->join(selected_code);
                     }
                 } else if (page == Page::Create) {
-                    if (decrease.contains(point) && lobby_size > 2) {
+                    if (make_lobby.contains(point)) {
                         click_sound.play();
-                        --lobby_size;
+                        create_lobby(lobby_field.value);
                     }
-                    if (increase.contains(point) && lobby_size < 4) {
+                } else if (page == Page::Waiting && session->lobby()) {
+                    const auto& lobby = *session->lobby();
+                    if (session->is_leader() && lobby_title.contains(point)) {
+                        if (!renaming) rename_field.value = lobby.name;
+                        renaming = true;
+                    } else {
+                        renaming = false;
+                    }
+                    if (session->is_leader() && start_game.contains(point) && !busy()) {
                         click_sound.play();
-                        ++lobby_size;
+                        session->start();
                     }
-                    if (make_lobby.contains(point) && lobby_field.value.find_first_not_of(' ') != std::string::npos) {
-                        click_sound.play();
-                        lobbies.push_back({lobby_field.value, lobby_size});
-                        selected_lobby = lobbies.size() - 1;
-                        first_visible_lobby = lobbies.size() > visible_lobbies ? lobbies.size() - visible_lobbies : 0;
-                        page = Page::Lobbies;
-                        error.clear();
-                    }
-                } else if (page == Page::Waiting && enter_game.contains(point) && current_players == lobby_size) {
-                    click_sound.play();
-                    if (auto result = launch_game()) return result;
                 }
             }
             if (settings_open) continue;
@@ -416,20 +408,80 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
                 if (event.key.code == sf::Keyboard::Return) {
                     if (page == Page::Title) { click_sound.play(); page = Page::Connection; }
                     else if (page == Page::Connection) { click_sound.play(); connect(); }
+                    else if (page == Page::Create) { click_sound.play(); create_lobby(lobby_field.value); }
+                    else if (page == Page::Lobbies && code_focused) join_by_code();
+                    else if (page == Page::Waiting && renaming) rename_lobby();
                 }
             }
             if (event.type == sf::Event::TextEntered) {
                 std::string* value = nullptr;
-                if (page == Page::Connection) value = &fields[active].value;
-                if (page == Page::Create) value = &lobby_field.value;
+                std::size_t limit = 40;
+                if (page == Page::Connection) {
+                    value = &fields[active].value;
+                    if (active == 0) limit = protocol::kMaxPlayerName;
+                }
+                if (page == Page::Create) {
+                    value = &lobby_field.value;
+                    limit = protocol::kMaxLobbyName;
+                }
+                if (page == Page::Lobbies && code_focused) {
+                    value = &code_field.value;
+                    limit = protocol::kCodeLength;
+                }
+                if (page == Page::Waiting && renaming) {
+                    value = &rename_field.value;
+                    limit = protocol::kMaxLobbyName;
+                }
                 if (value) {
-                    if (event.text.unicode == 8 && !value->empty()) value->pop_back();
-                    else if (event.text.unicode >= 32 && event.text.unicode < 127 && value->size() < 40)
-                        value->push_back(static_cast<char>(event.text.unicode));
+                    const auto c = event.text.unicode;
+                    if (c == 8 && !value->empty()) value->pop_back();
+                    else if (c >= 32 && c < 127 && value->size() < limit) {
+                        char typed = static_cast<char>(c);
+                        // Room codes only use letters and digits, shown in upper case.
+                        if (value == &code_field.value) {
+                            typed = static_cast<char>(std::toupper(static_cast<unsigned char>(typed)));
+                            if (protocol::kCodeAlphabet.find(typed) == std::string_view::npos) continue;
+                        }
+                        value->push_back(typed);
+                    }
                 }
             }
         }
         if (!window.isOpen()) break;
+
+        // Follow the session: it decides when we are connected, in a lobby or in game.
+        if (session) {
+            session->update(0); // Also the heartbeat that keeps us connected.
+            const Phase phase = session->phase();
+            if (page == Page::Connection && phase == Phase::Browsing) {
+                page = Page::Home;
+                error.clear();
+            }
+            if (phase == Phase::InLobby) {
+                if (page != Page::Waiting) {
+                    page = Page::Waiting;
+                    renaming = false;
+                }
+                if (session->lobby()->state == protocol::LobbyPhase::Playing) {
+                    settings.click_sound_enabled = click_sound.enabled();
+                    return true;
+                }
+                if (solo_pending && session->is_leader() && !busy()) {
+                    solo_pending = false;
+                    session->start();
+                }
+            } else if (page == Page::Waiting) {
+                page = Page::Lobbies; // Our leave went through, or the connection was lost.
+            }
+            if (!session->error().empty()) solo_pending = false;
+            const auto& lobbies = session->lobbies();
+            if (first_visible_lobby + visible_lobbies > lobbies.size())
+                first_visible_lobby = lobbies.size() > visible_lobbies ? lobbies.size() - visible_lobbies : 0;
+            if (std::none_of(lobbies.begin(), lobbies.end(),
+                             [&](const auto& lobby) { return lobby.code == selected_code; }))
+                selected_code.clear();
+        }
+
         const auto view = current_view_bounds(window);
         const auto mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
         const bool pressed = sf::Mouse::isButtonPressed(sf::Mouse::Left);
@@ -448,13 +500,15 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
                 draw_text(window, *font, fields[i].label, 88.f, fields[i].bounds.top + 12.f, 18, style::ink);
                 draw_field(fields[i], i == active && !settings_open);
             }
-            gui.button(window, *font, connect_button, "Se connecter", mouse, pressed, true, 1);
+            // Pressing again retries, with the fields as they are now.
+            gui.button(window, *font, connect_button, session ? "Reessayer" : "Se connecter",
+                       mouse, pressed, true, 1);
         } else if (page == Page::Home) {
             gui.surface(window, panel);
             draw_logo(window, game_logo, {170.f, 32.f, 220.f, 74.f});
-            gui.button(window, *font, join_button, "Join lobby", mouse, pressed);
-            gui.button(window, *font, create_button, "Create lobby", mouse, pressed, true, 1);
-            gui.button(window, *font, solo_button, "Play solo", mouse, pressed, true, 2);
+            gui.button(window, *font, join_button, "Join lobby", mouse, pressed, !busy());
+            gui.button(window, *font, create_button, "Create lobby", mouse, pressed, !busy(), 1);
+            gui.button(window, *font, solo_button, "Play solo", mouse, pressed, !busy(), 2);
             gui.surface(window, {327.f, 119.f, 149.f, 216.f}, true);
             gui.icon(window, {200, 2060, 185, 195}, {377.f, 135.f, 49.f, 51.f});
             gui.centered(window, *font, "MEILLEUR", {330.f, 202.f, 143.f, 24.f}, 15);
@@ -462,52 +516,83 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             gui.centered(window, *font, "--", {330.f, 254.f, 143.f, 36.f}, 30);
             gui.centered(window, *font, "Bientot disponible", {330.f, 300.f, 143.f, 18.f}, 10, style::muted);
         } else if (page == Page::Lobbies) {
+            const auto& lobbies = session->lobbies();
             gui.panel(window, *font, "Join lobby", panel);
-            draw_text(window, *font, "Choisis un lobby", 224.f, 101.f, 12, style::muted);
+            gui.centered(window, *font, "Choisis un lobby ou entre son code", {80.f, 98.f, 400.f, 18.f}, 12,
+                         style::muted);
             if (lobbies.empty()) {
                 gui.centered(window, *font, "Aucun lobby disponible", {80.f, 158.f, 400.f, 40.f}, 20);
                 gui.centered(window, *font, "Cree un lobby depuis le menu.", {80.f, 207.f, 400.f, 30.f}, 14, style::muted);
             }
             for (std::size_t row = 0; row < visible_lobbies && first_visible_lobby + row < lobbies.size(); ++row) {
-                const auto index = first_visible_lobby + row;
-                const auto& lobby = lobbies[index];
-                const sf::FloatRect bounds{90.f, 119.f + static_cast<float>(row) * 56.f, 380.f, 49.f};
+                const auto& lobby = lobbies[first_visible_lobby + row];
+                const auto bounds = lobby_row(row);
                 gui.surface(window, bounds, true);
-                if (index == selected_lobby)
+                if (lobby.code == selected_code)
                     gui.icon(window, {3090, 755, 185, 195}, {99.f, bounds.top + 7.f, 32.f, 33.f});
-                std::string name = lobby.name;
-                if (name.size() > 23) name = name.substr(0, 20) + "...";
-                draw_text(window, *font, name, 141.f, bounds.top + 13.f, 16, style::ink);
-                draw_text(window, *font, "1 / " + std::to_string(lobby.size), 414.f, bounds.top + 14.f, 14, style::muted);
+                draw_text(window, *font, truncated(lobby.name, 20), 141.f, bounds.top + 7.f, 16, style::ink);
+                draw_text(window, *font, lobby.code + (lobby.state == protocol::LobbyPhase::Playing
+                                                           ? "  -  en jeu" : "  -  en attente"),
+                          141.f, bounds.top + 28.f, 11, style::muted);
+                draw_text(window, *font, std::to_string(lobby.members) + " / 4", 414.f, bounds.top + 14.f, 14,
+                          style::muted);
             }
-            gui.button(window, *font, join_selected, "Rejoindre", mouse, pressed, !lobbies.empty(), 1);
+            draw_field(code_field, code_focused && !settings_open);
+            gui.button(window, *font, join_code, "OK", mouse, pressed,
+                       code_field.value.size() == protocol::kCodeLength && !busy(), 1, 16);
+            gui.button(window, *font, join_selected, "Rejoindre", mouse, pressed,
+                       !selected_code.empty() && !busy(), 1);
             if (lobbies.size() > visible_lobbies)
                 draw_text(window, *font, "Molette pour parcourir les lobbies", 167.f, 360.f, 11, style::muted);
         } else if (page == Page::Create) {
             gui.panel(window, *font, "Create lobby", panel);
             draw_text(window, *font, "Nom du lobby", 83.f, 132.f, 15, style::ink);
             draw_field(lobby_field, !settings_open);
-            draw_text(window, *font, "Joueurs", 83.f, 219.f, 18, style::ink);
-            gui.button(window, *font, decrease, "-", mouse, pressed, lobby_size > 2);
-            gui.surface(window, {285.f, 207.f, 105.f, 47.f}, true);
-            gui.centered(window, *font, std::to_string(lobby_size), {285.f, 207.f, 105.f, 47.f}, 24);
-            gui.button(window, *font, increase, "+", mouse, pressed, lobby_size < 4);
+            gui.centered(window, *font, "Jusqu'a 4 joueurs par lobby", {80.f, 207.f, 400.f, 47.f}, 16, style::muted);
             gui.button(window, *font, make_lobby, "Creer le lobby", mouse, pressed,
-                       lobby_field.value.find_first_not_of(' ') != std::string::npos, 1);
-        } else if (page == Page::Waiting) {
+                       lobby_field.value.find_first_not_of(' ') != std::string::npos && !busy(), 1);
+        } else if (page == Page::Waiting && session->lobby()) {
+            const auto& lobby = *session->lobby();
+            const bool leader = session->is_leader();
             gui.panel(window, *font, "Salle d'attente", panel);
-            gui.centered(window, *font, lobby_name.substr(0, 27), {80.f, 112.f, 400.f, 43.f}, 22);
-            gui.centered(window, *font, "Joueurs : " + std::to_string(current_players) + " / " + std::to_string(lobby_size),
-                         {80.f, 178.f, 400.f, 37.f}, 20);
-            const bool full = current_players == lobby_size;
-            gui.button(window, *font, enter_game, full ? "Jouer" : "En attente de joueurs...",
-                       mouse, pressed, full, 1, 16);
+            if (renaming) draw_field(rename_field, true);
+            else gui.centered(window, *font, lobby.name, lobby_title, 20);
+            gui.centered(window, *font, "Code : " + lobby.code, {80.f, 136.f, 400.f, 22.f}, 15, style::muted);
+            for (std::size_t i = 0; i < lobby.members.size(); ++i) {
+                const auto& member = lobby.members[i];
+                const sf::FloatRect row{100.f, 162.f + static_cast<float>(i) * 31.f, 360.f, 28.f};
+                gui.surface(window, row, true);
+                sf::RectangleShape colour({14.f, 14.f});
+                colour.setPosition(row.left + 10.f, row.top + 7.f);
+                colour.setFillColor(kPlayerColors[(member.slot - 1U) % kPlayerColors.size()]);
+                window.draw(colour);
+                std::string name = member.name;
+                if (member.slot == lobby.yourSlot) name += " (toi)";
+                draw_text(window, *font, name, row.left + 32.f, row.top + 5.f, 14, style::ink);
+                std::string tags;
+                if (member.slot == lobby.leaderSlot) tags = "chef";
+                if (member.role == protocol::MemberRole::Spectator)
+                    tags += tags.empty() ? "spectateur" : ", spectateur";
+                draw_text(window, *font, tags, row.left + 262.f, row.top + 7.f, 11, style::muted);
+            }
+            if (leader) {
+                gui.button(window, *font, start_game, "Lancer la partie", mouse, pressed, !busy(), 1, 17);
+                if (!renaming)
+                    gui.centered(window, *font, "Clique sur le nom pour le changer", {80.f, 352.f, 400.f, 16.f},
+                                 10, style::muted);
+            } else {
+                gui.button(window, *font, start_game, "En attente du chef...", mouse, pressed, false, 1, 16);
+            }
         }
         gui.icon(window, {200, 2710, 185, 195}, back_button);
         gui.icon(window, {3090, 315, 185, 195}, settings_button);
-        if (!error.empty()) {
+        // Our own message first, then the server's refusal, then the connection state.
+        std::string message = error;
+        if (message.empty() && session) message = session->error();
+        if (message.empty() && session && session->phase() == Phase::Connecting) message = session->status();
+        if (!message.empty()) {
             gui.surface(window, {35.f, 377.f, 490.f, 29.f});
-            gui.centered(window, *font, error, {40.f, 377.f, 480.f, 26.f}, 11, sf::Color(157, 36, 49));
+            gui.centered(window, *font, message, {40.f, 377.f, 480.f, 26.f}, 11, sf::Color(157, 36, 49));
         }
         if (settings_open) {
             sf::RectangleShape shade({view.width, view.height});
@@ -515,8 +600,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
             shade.setFillColor(sf::Color(21, 37, 67, 160));
             window.draw(shade);
             gui.panel(window, *font, "Reglages", {130.f, 104.f, 300.f, 280.f});
-            gui.button(window, *font, music_toggle, music_enabled ? "Musique : ON" : "Musique : OFF",
-                       mouse, pressed, true, music_enabled ? 1 : 2);
+            gui.button(window, *font, music_toggle, settings.music_enabled ? "Musique : ON" : "Musique : OFF",
+                       mouse, pressed, true, settings.music_enabled ? 1 : 2);
             gui.button(window, *font, click_toggle, click_sound.enabled() ? "Son : ON" : "Son : OFF",
                        mouse, pressed, true, click_sound.enabled() ? 1 : 2);
             gui.button(window, *font, controls_button, "Controles", mouse, pressed);
@@ -528,7 +613,8 @@ std::optional<ConnectionSettings> show_launcher(sf::RenderWindow& window, Window
         }
         window.display();
     }
-    return std::nullopt;
+    settings.click_sound_enabled = click_sound.enabled();
+    return false;
 }
 
 } // namespace ntype::client

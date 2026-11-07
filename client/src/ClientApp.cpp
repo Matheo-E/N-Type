@@ -28,8 +28,8 @@ constexpr int kPlayerTexture = 1;  // id of sprites/player/tooth.png in assets/d
 constexpr int kPlayerFrameSize = 724;
 constexpr float kRenderedPlayerSize = 88.f;
 const sf::FloatRect kMenuButton{1195.f, 20.f, 65.f, 61.f};
-const sf::FloatRect kContinueButton{430.f, 175.f, 420.f, 110.f};
-const sf::FloatRect kRestartButton{430.f, 305.f, 420.f, 110.f};
+const sf::FloatRect kContinueButton{430.f, 185.f, 420.f, 110.f};
+const sf::FloatRect kLobbyInfo{340.f, 315.f, 600.f, 110.f};
 const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
@@ -56,10 +56,9 @@ constexpr std::uint8_t bit(const protocol::InputType key) {
 
 } // namespace
 
-ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, const std::string& name,
-                     const std::string& host, const std::uint16_t port,
+ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, ClientNetwork& network,
                      const bool music_enabled)
-    : name_(name), network_(host, port), window_(window), window_state_(window_state),
+    : network_(network), window_(window), window_state_(window_state),
       music_enabled_(music_enabled) {
     const std::string asset_dir = NTYPE_ASSET_DIR;
     if (!LoadTextures(world_, asset_dir))
@@ -194,14 +193,24 @@ GameExitAction ClientApp::run() {
             break;
         }
         network_.update(pause_menu_open_ ? 0 : read_input());
-        std::string title = "N-Type | " + name_ + " | " + network_.status();
-        if (const auto id = network_.id()) {
-            title += std::string(" (") + kColorNames[*id - 1U] + ")";
+        // The lobby decides when the game ends; the session itself stays open.
+        if (network_.phase() != Phase::InLobby) {
+            exit_action_ = GameExitAction::Lobby; // Connection lost, or removed from the lobby.
+            break;
         }
+        const auto& lobby = *network_.lobby();
+        if (lobby.state != protocol::LobbyPhase::Playing) {
+            exit_action_ = GameExitAction::WaitingRoom;
+            break;
+        }
+        std::string title = "N-Type | " + network_.name() + " | " + lobby.name + " (" + lobby.code + ")";
+        if (lobby.yourSlot >= 1 && lobby.yourSlot <= config::kMaxPlayers) {
+            title += std::string(" | ") + kColorNames[lobby.yourSlot - 1U];
+        }
+        if (network_.is_spectator()) title += " | spectator";
         window_.setTitle(title + " | Arrows/WASD/ZQSD | F11: fullscreen | Esc: menu");
         render();
     }
-    network_.disconnect();
     music_.stop();
     return exit_action_;
 }
@@ -238,13 +247,9 @@ void ClientApp::poll_events() {
             } else if (pause_menu_open_ && kContinueButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = false;
-            } else if (pause_menu_open_ && kRestartButton.contains(point)) {
-                UiClickSound::instance().play();
-                exit_action_ = GameExitAction::Restart;
-                session_active_ = false;
-                return;
             } else if (pause_menu_open_ && kLobbyButton.contains(point)) {
                 UiClickSound::instance().play();
+                network_.leave();
                 exit_action_ = GameExitAction::Lobby;
                 session_active_ = false;
                 return;
@@ -264,7 +269,8 @@ void ClientApp::poll_events() {
 }
 
 std::uint8_t ClientApp::read_input() const {
-    if (!window_.hasFocus() || pause_menu_open_) {
+    // Spectators watch: they join as players at the next level.
+    if (!window_.hasFocus() || pause_menu_open_ || network_.is_spectator()) {
         return 0;
     }
     using Key = sf::Keyboard::Key;
@@ -387,7 +393,12 @@ void ClientApp::draw_pause_menu() {
     window_.draw(shade);
     pause_gui_.panel(window_, ui_font_, "Pause", {320.f, 125.f, 640.f, 515.f});
     pause_gui_.button(window_, ui_font_, kContinueButton, "Continuer", mouse, pressed, true, 1, 32);
-    pause_gui_.button(window_, ui_font_, kRestartButton, "Recommencer", mouse, pressed, true, 0, 32);
+    if (const auto& lobby = network_.lobby()) {
+        pause_gui_.centered(window_, ui_font_, "Lobby : " + lobby->name,
+                            {kLobbyInfo.left, kLobbyInfo.top + 10.f, kLobbyInfo.width, 40.f}, 26);
+        pause_gui_.centered(window_, ui_font_, "Code : " + lobby->code,
+                            {kLobbyInfo.left, kLobbyInfo.top + 58.f, kLobbyInfo.width, 34.f}, 22, style::muted);
+    }
     pause_gui_.button(window_, ui_font_, kLobbyButton, "Lobby", mouse, pressed, true, 2, 24);
     pause_gui_.button(window_, ui_font_, kMusicButton,
                       music_enabled_ ? "Musique : ON" : "Musique : OFF", mouse, pressed,
@@ -414,6 +425,11 @@ void ClientApp::render() {
 
     Animate(world_, elapsed_seconds);
     Draw(world_, window_);
+    if (network_.is_spectator()) {
+        const sf::FloatRect banner{340.f, 24.f, 600.f, 60.f};
+        pause_gui_.surface(window_, banner);
+        pause_gui_.centered(window_, ui_font_, "Spectateur - tu joueras au prochain niveau", banner, 22);
+    }
     draw_pause_menu();
     window_.display();
 }

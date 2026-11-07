@@ -20,28 +20,30 @@
 
 namespace ntype::client {
 
-enum class GameExitAction { Quit, Restart, Lobby };
+/** @brief Why the game screen closed. */
+enum class GameExitAction {
+    Quit,        // The window was closed.
+    Lobby,       // The player left the lobby (or lost it): back to the lobby list.
+    WaitingRoom, // The lobby went back to waiting (game over): back to its waiting room.
+};
 
 /** @brief Graphical client that mirrors server snapshots and renders the selected level. */
 class ClientApp {
 public:
     /**
-     * @brief Creates the network client and loads the first adventure background.
+     * @brief Shows the game of the session's lobby and loads the first adventure background.
      * @param window Shared application window.
      * @param window_state Window preferences retained across all screens.
-     * @param name Player display name.
-     * @param host Server hostname or address.
-     * @param port UDP server port.
+     * @param network Session already inside a playing lobby; it outlives this screen.
      * @param music_enabled Initial music preference retained across screens.
      */
-    ClientApp(sf::RenderWindow& window, WindowState& window_state, const std::string& name,
-              const std::string& host, std::uint16_t port, bool music_enabled);
-    /** @brief Runs one game session until quit, restart, or return-to-lobby is selected. */
+    ClientApp(sf::RenderWindow& window, WindowState& window_state, ClientNetwork& network,
+              bool music_enabled);
+    /** @brief Runs the game until the lobby stops playing, the player leaves, or the window closes. */
     GameExitAction run();
     bool music_enabled() const { return music_enabled_; }
 
 private:
-    std::string name_;
     void poll_events();
     std::uint8_t read_input() const;
     void sync_world();
@@ -60,7 +62,7 @@ private:
                                 std::size_t level, std::size_t ambience);
     void load_level_music(std::size_t level);
 
-    ClientNetwork network_;
+    ClientNetwork& network_;
     sf::RenderWindow& window_;
     WindowState& window_state_;
     sf::Font ui_font_;
