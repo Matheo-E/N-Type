@@ -15,6 +15,7 @@ struct Options {
     std::string host = "127.0.0.1";
     std::uint16_t port = config::kDefaultPort;
     bool help = false;
+    bool no_enemies = false; // Server: levels spawn nothing (network tests)
 };
 
 enum class Application { Client, Server };
@@ -32,6 +33,8 @@ inline Options parse_options(int argc, char** argv, Application application) {
             }
         } else if (arg == "-h" && application == Application::Client && index + 1 < argc) {
             options.host = argv[++index];
+        } else if (arg == "--no-enemies" && application == Application::Server) {
+            options.no_enemies = true;
         } else if (arg == "-p" && index + 1 < argc) {
             const std::string_view text(argv[++index]);
             unsigned value = 0;

@@ -22,6 +22,20 @@ bool Touching(World& world, int hitid, int hurtid) {
     return delta.x * delta.x + delta.y * delta.y <= reach * reach;
 }
 
+// Notes a death in world.Deaths, while the victim still has all its components.
+void RecordDeath(World& world, int hitid, int hurtid) {
+    EDeath death;
+    death.Id = hurtid;
+    auto owner = world.OwnerIds.find(hitid);  // a bullet counts for its shooter
+    death.Killer = world.Bullets.count(hitid) > 0 && owner != world.OwnerIds.end() ? owner->second.OId : hitid;
+    auto enemy = world.Enemies.find(hurtid);
+    death.EnemyType = enemy != world.Enemies.end() ? enemy->second.TypeId : -1;
+    death.Player = world.Players.count(hurtid) > 0;
+    auto pos = world.Positions.find(hurtid);
+    death.Position = pos != world.Positions.end() ? pos->second.Xy : sf::Vector2f(0, 0);
+    world.Deaths.push_back(death);
+}
+
 // Applies one hit: the bullet is used up, and the target loses health unless it is
 // protected. Entities to remove are only noted in `dead`: removing them now would break
 // the loops that are still walking the maps.
@@ -30,7 +44,8 @@ void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
         dead.push_back(hitid);
     }
     auto health = world.Healths.find(hurtid);
-    if (health == world.Healths.end() || world.Invincibles.count(hurtid) > 0) {
+    // Already dead this frame (two hits at once): it dies, and counts, only once.
+    if (health == world.Healths.end() || health->second.Hp <= 0 || world.Invincibles.count(hurtid) > 0) {
         return;
     }
     auto damage = world.Damages.find(hitid);
@@ -40,7 +55,11 @@ void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
         amount = std::max(amount - stats->second.Defense, 1);
     }
     health->second.Hp -= amount;
+    if (amount > 0) {
+        ++health->second.Hits;
+    }
     if (health->second.Hp <= 0) {
+        RecordDeath(world, hitid, hurtid);
         dead.push_back(hurtid);
     } else if (world.Players.count(hurtid) > 0) {
         world.Invincibles[hurtid].Time = HitInvincibility;

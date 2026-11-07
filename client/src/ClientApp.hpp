@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -17,6 +18,9 @@
 #include "GuiSkin.hpp"
 #include "WindowState.hpp"
 #include "ControlsMenu.hpp"
+#include "ExplosionEffects.hpp"
+#include "ImpactSounds.hpp"
+#include "Hud.hpp"
 
 namespace ntype::client {
 
@@ -56,6 +60,11 @@ private:
                               const std::array<sf::Texture, 4>& textures,
                               sf::Uint8 opacity = 255);
     void draw_pause_menu();
+    /** @brief Game over or victory: every member's score, the total, then the waiting room. */
+    void draw_results();
+    /** @brief Names and scores in the letterbox bars, or over the play area without bars. */
+    void draw_hud();
+    std::optional<Hud> hud_; // Built once the textures it borrows are loaded.
     void update_adventure(float elapsed_seconds);
     void load_background(std::size_t level, std::size_t ambience);
     void load_background_layers(std::array<sf::Texture, 4>& textures,
@@ -68,12 +77,16 @@ private:
     sf::Font ui_font_;
     GuiSkin pause_gui_;
     ControlsMenu controls_menu_;
+    ExplosionEffects explosions_;
+    ImpactSounds impact_sounds_;
+    float shake_ = 0.f; // seconds of screen shake left (our own player was hit)
     sf::Music music_;
     std::array<sf::Texture, 4> background_textures_;
     std::array<sf::Texture, 4> transition_background_textures_;
     sf::Clock frame_clock_;
     double automatic_background_x_ = 0.0;
     bool pause_menu_open_ = false;
+    bool results_open_ = false; // The lobby's game ended: the results screen is shown.
     bool music_enabled_ = true;
     bool session_active_ = true;
     float adventure_elapsed_seconds_ = 0.f;
@@ -85,7 +98,26 @@ private:
     GameExitAction exit_action_ = GameExitAction::Quit;
     // Engine world mirroring the latest snapshot: one entity per player.
     World world_;
-    std::map<std::uint16_t, int> entities_; // player id -> engine entity
+    // What the server sent, drawn by engine entities. A player is two: the coloured halo,
+    // drawn first, and the tooth. Others have one sprite, or none (area attacks: rings).
+    struct Mirror {
+        std::uint8_t kind = 0;
+        std::uint8_t type = 0;
+        int sprite = -1;
+        int halo = -1;
+        std::uint8_t hits = 0;  // the server's hit counter: a change is a new impact
+        float flash = 0.f;      // seconds of hit flash left
+        float blink = 0.f;      // seconds of blinking left (a player just hit)
+        int look = -1;          // player: 0 intact, 1 damaged, 2 broken
+    };
+    void add_mirror(Mirror& mirror, const protocol::Entity& entity);
+    void on_hit(Mirror& mirror, const protocol::Entity& entity);
+    void set_player_look(Mirror& mirror, std::uint8_t hp);
+    /** @brief Flashes, blinking and screen shake, a frame further. */
+    void update_impacts(float elapsed_seconds);
+    void draw_area_attacks();
+    void show_deaths();
+    std::map<std::uint16_t, Mirror> entities_; // network id -> engine entities
 };
 
 } // namespace ntype::client

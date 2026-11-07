@@ -32,6 +32,8 @@ public:
     sf::IntRect Source;    // the cell of the image to show
     float Scale = 1;
     bool FlipX = false;    // draw the bullet mirrored
+    std::vector<int> AnimationFrames;  // empty: not animated (see EAnimation)
+    float AnimationFrameTime = 0.1f;
     // How each bullet moves, as a flight pattern (flight_patterns.json), written for a bullet
     // fired straight down: the pattern is turned to follow the bullet's own firing angle.
     // -1: the bullet just flies in a straight line along its angle at Speed.

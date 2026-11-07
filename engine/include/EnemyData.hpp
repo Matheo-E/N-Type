@@ -12,6 +12,8 @@ public:
     std::string Name = "enemy";
     int Hp = 1;
     int ContactDamage = 0;  // damage dealt to the player on touch; 0: touching is harmless
+    int Score = 0;          // points for the player who kills it
+    bool Boss = false;      // the level's boss: its health is shown to the players
     float Radius = 16;
     int TextureId = -1;  // id in textures.json; -1: the enemy is not drawn
     sf::IntRect Source;  // the cell of the image to show

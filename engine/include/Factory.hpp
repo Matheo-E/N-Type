@@ -15,3 +15,10 @@ int CreateEEnemyFollower(World& world, sf::Vector2f pos, int enemyid, int parent
 int CreateEStatic(World& world, sf::Vector2f pos);
 // An item lying on the map, built from world.ItemTypes. Returns -1 if itemid is unknown.
 int CreateEItem(World& world, sf::Vector2f pos, int itemid);
+
+// Only the look of a type (sprite, animation, draw layer) on an existing entity, for a
+// client that draws what a server tells it. False if the type is unknown, or for a shot
+// whose pattern has no sprite.
+bool AddEnemyLook(World& world, int id, int enemyid);
+bool AddShotLook(World& world, int id, int patternid);
+bool AddItemLook(World& world, int id, int itemid);

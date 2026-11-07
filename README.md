@@ -120,11 +120,31 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 - The active music is stopped before the next screen starts, so tracks never overlap.
 - The window title shows your name, the lobby, its room code and your colour.
 
-Levels and game over do not exist yet. Until they do, type these commands in the
-server's terminal (the code is the lobby's room code):
+**The game.** Space shoots a stream of toothpaste. Each level sends timed waves of its
+three enemies (`assets/data/levels.json`), then its boss; killing an enemy gives its
+points (`score` in `enemies.json`) to the player who shot it. Enemies explode when they
+die, area attacks show as red rings, each card in the HUD shows its player's health and
+the boss's health appears at the bottom of the play area. Every hit shows: an enemy
+flashes white with a short tick (`hit_enemy.wav`), a player flashes red with a deeper
+thud (`hit_player.wav`) and blinks while it is protected, and the screen shakes when it
+is you. A tooth wears its damage: `tooth_damaged.png` once hurt, `tooth_broken.png` at
+1 HP, each with its own halo. `tools/make_impact_sounds.py` and `tools/make_tooth_halo.py`
+rebuild the sounds and halos. Players have 3 HP: a dead
+player watches until the next level. Killing the boss starts the next level (background
+and music follow), with every dead player back. The lobby returns to its waiting room
+when every player is dead, or when the last boss (Carry) dies. A results screen then
+shows **Game over** (with the level reached) or **Victoire !**, every player's score
+best first, in their colour, and the total of everyone's points; **Continuer** (or Enter)
+goes to the waiting room. If the leader starts again meanwhile, everyone goes straight
+into the new game.
 
-- `level <code>` — a new level starts: spectators become players.
-- `gameover <code>` — everyone is game over: the lobby returns to the waiting room.
+Server terminal commands, to test without playing (the code is the lobby's room code):
+
+- `level <code>` — skips to the next level: spectators and dead players get a ship.
+- `gameover <code>` — ends the game: the lobby returns to the waiting room.
+- `score <code> <slot> <points>` — gives points to the member in that slot (1–4).
+
+`r-type_server --no-enemies` runs games with ships only; the network tests use it.
 
 ## Files
 
@@ -232,9 +252,11 @@ the entire viewport and are stopped at all four edges. Invalid packets are ignor
 `assets/data/enemies.json` defines twelve enemies across the three levels,
 including bosses Theice (200 HP), Candybear (250 HP) and Carry (500 HP).
 Their sprites, planned attacks, damage, delays and stronger boss phases are
-documented in [docs/ENEMIES.md](docs/ENEMIES.md). The new combat fields are
-prepared data: the current engine ignores them, and the network server does not
-yet spawn these enemies. This does not activate combat or best-score tracking.
+documented in [docs/ENEMIES.md](docs/ENEMIES.md). The server spawns them from
+`levels.json` and the engine runs their stats, flight and attack patterns, contact
+damage and scores. Not implemented yet: the bosses' special attacks and phases
+(Theice's laser, phase speed-ups, Carry's one-shot), attack warnings, and the
+best-score card.
 
 ## Verification
 

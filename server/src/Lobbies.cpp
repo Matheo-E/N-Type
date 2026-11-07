@@ -4,7 +4,7 @@
 
 namespace ntype::server {
 
-Lobbies::Lobbies(const std::uint32_t seed) : rng_(seed) {}
+Lobbies::Lobbies(const std::uint32_t seed, const GameData& data) : data_(&data), rng_(seed) {}
 
 std::string Lobbies::new_code() {
     std::uniform_int_distribution<std::size_t> pick(0, protocol::kCodeAlphabet.size() - 1);
@@ -23,7 +23,7 @@ Lobby* Lobbies::create(std::string name) {
         return nullptr;
     }
     std::string code = new_code();
-    auto [it, added] = lobbies_.try_emplace(code, code, std::move(name));
+    auto [it, added] = lobbies_.try_emplace(code, code, std::move(name), *data_);
     return &it->second;
 }
 

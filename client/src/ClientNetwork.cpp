@@ -136,20 +136,74 @@ void ClientNetwork::handle(const std::vector<std::uint8_t>& bytes) {
         break;
     case MessageType::WorldSnapshot:
         if (lobby_ && lobby_->state == LobbyPhase::Playing) {
-            players_.clear();
-            for (const auto& entity : packet->entities) {
-                if (entity.kind == config::kPlayerKind && entity.id >= 1 && entity.id <= config::kMaxPlayers) {
-                    players_.push_back(entity);
-                }
-            }
+            on_snapshot(*packet);
+        }
+        break;
+    case MessageType::EntityDied:
+        if (lobby_ && lobby_->state == LobbyPhase::Playing) {
+            deaths_.push_back(packet->entities.front());
         }
         break;
     case MessageType::ClientLeft:
         std::erase_if(players_, [&](const protocol::Entity& player) { return player.id == packet->id; });
+        std::erase_if(entities_, [&](const protocol::Entity& entity) {
+            return entity.kind == config::kPlayerKind && entity.id == packet->id;
+        });
         break;
     default:
         break; // Not used by this client.
     }
+}
+
+// A frame arrives in parts; it replaces the shown one once every part is there.
+// Parts of an older frame than the one shown, or being built, are dropped.
+void ClientNetwork::on_snapshot(const protocol::Packet& packet) {
+    const auto newer = [](const std::uint32_t a, const std::uint32_t b) {
+        return static_cast<std::int32_t>(a - b) > 0; // survives the counter wrapping
+    };
+    if (shown_frame_ && !newer(packet.frame, *shown_frame_)) {
+        return;
+    }
+    if (building_parts_.empty() || packet.frame != building_frame_) {
+        if (!building_parts_.empty() && newer(building_frame_, packet.frame)) {
+            return; // Late part of a frame already replaced by a newer one.
+        }
+        building_frame_ = packet.frame;
+        building_parts_.assign(packet.parts, std::nullopt);
+    }
+    if (packet.part >= building_parts_.size() || building_parts_[packet.part]) {
+        return;
+    }
+    building_parts_[packet.part] = packet.entities;
+    if (std::any_of(building_parts_.begin(), building_parts_.end(), [](const auto& part) { return !part; })) {
+        return;
+    }
+    entities_.clear();
+    for (const auto& part : building_parts_) {
+        entities_.insert(entities_.end(), part->begin(), part->end());
+    }
+    players_.clear();
+    for (const auto& entity : entities_) {
+        if (entity.kind == config::kPlayerKind && entity.id >= 1 && entity.id <= config::kMaxPlayers) {
+            players_.push_back(entity);
+        }
+    }
+    shown_frame_ = building_frame_;
+    building_parts_.clear();
+}
+
+void ClientNetwork::clear_world() {
+    players_.clear();
+    entities_.clear();
+    deaths_.clear();
+    building_parts_.clear();
+    shown_frame_.reset();
+}
+
+std::vector<protocol::Entity> ClientNetwork::take_deaths() {
+    std::vector<protocol::Entity> deaths;
+    deaths.swap(deaths_);
+    return deaths;
 }
 
 void ClientNetwork::on_state(const protocol::LobbyState& state) {
@@ -169,7 +223,7 @@ void ClientNetwork::on_state(const protocol::LobbyState& state) {
     }
     lobby_ = state;
     if (state.state != LobbyPhase::Playing) {
-        players_.clear();
+        clear_world();
     }
 }
 
@@ -207,7 +261,7 @@ void ClientNetwork::leave() {
     }
     left_code_ = lobby_->code;
     lobby_.reset();
-    players_.clear();
+    clear_world();
     list_received_ = false;
     request([] { return protocol::makeLobbyLeave(); }, [this] { return list_received_; });
     if (pending_) {
@@ -228,7 +282,7 @@ void ClientNetwork::reset() {
     connected_ = false;
     lobbies_.clear();
     lobby_.reset();
-    players_.clear();
+    clear_world();
     pending_.reset();
     left_code_.clear();
 }

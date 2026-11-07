@@ -91,6 +91,9 @@ public:
     sf::IntRect Source;  // the cell of the image to show; empty means the whole image
     sf::Vector2f Scale = {1, 1};
     bool FlipX = false;  // drawn mirrored left-right (for art facing the wrong way)
+    sf::Color Color = sf::Color::White;  // multiplies the image: white keeps it as is, alpha fades it
+    // Added on top of the image (a hit flash): its alpha says how strong; transparent: none.
+    sf::Color Flash = sf::Color::Transparent;
 };
 
 // Plays an animation on the entity's ESprite. The frames of a sprite sheet sit side by side:
@@ -154,9 +157,36 @@ public:
     int ItemId = -1;
 };
 
-class EPlayer {};
-class EEnemy {};
-class EBullet {};
+// A player. Move and Shoot are what this player asks for this frame: the local
+// keyboard fills them (ReadKeyboard), or the game sets them, e.g. from a network input.
+class EPlayer {
+public:
+    sf::Vector2f Move = {0, 0};  // each axis -1, 0 or 1
+    bool Shoot = false;
+};
+
+// An enemy. TypeId is its type in world.EnemyTypes (enemies.json).
+class EEnemy {
+public:
+    int TypeId = -1;
+};
+
+// A bullet. PatternId is the attack pattern that fired it (attack_patterns.json).
+class EBullet {
+public:
+    int PatternId = -1;
+};
+
+// Something that died in Collision. The entity is already destroyed when the game reads
+// this, so what the game may need about it is copied here.
+class EDeath {
+public:
+    int Id = -1;
+    int Killer = -1;      // who dealt the last hit: a bullet's shooter, or the body that touched
+    int EnemyType = -1;   // its type in world.EnemyTypes if it was an enemy
+    bool Player = false;  // it was a player
+    sf::Vector2f Position = {0, 0};
+};
 
 // ---- Combat ---------------------------------------------------------------
 
@@ -164,6 +194,7 @@ class EHealth {
 public:
     int Hp = 0;
     int MaxHp = 0;
+    int Hits = 0;  // how many hits hurt it so far (Collision): lets a game show each impact
 };
 
 class EDamage {

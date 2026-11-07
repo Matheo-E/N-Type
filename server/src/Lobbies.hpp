@@ -13,7 +13,8 @@ namespace ntype::server {
 // Every lobby on the server, by room code.
 class Lobbies {
 public:
-    explicit Lobbies(std::uint32_t seed = std::random_device{}());
+    // Every lobby builds its games from `data`, which must outlive this.
+    explicit Lobbies(std::uint32_t seed = std::random_device{}(), const GameData& data = GameData::none());
 
     // A new lobby with a fresh random code, or nullptr when the server has
     // too many lobbies. The returned pointer stays valid until the lobby is removed.
@@ -28,6 +29,7 @@ public:
 private:
     std::string new_code();
 
+    const GameData* data_;
     std::mt19937 rng_;
     std::map<std::string, Lobby> lobbies_;
 };

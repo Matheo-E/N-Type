@@ -25,7 +25,8 @@ int main(int argc, char** argv) {
         // membership belongs to it.
         std::unique_ptr<ClientNetwork> session;
         LauncherStart start = LauncherStart::Title;
-        while (window.isOpen() && show_launcher(window, window_state, settings, session, start)) {
+        // The launcher opens the window itself, so it runs before any isOpen() check.
+        while (show_launcher(window, window_state, settings, session, start)) {
             GameExitAction action;
             {
                 ClientApp app(window, window_state, *session, settings.music_enabled);

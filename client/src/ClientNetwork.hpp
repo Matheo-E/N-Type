@@ -44,8 +44,12 @@ public:
     const std::optional<protocol::LobbyState>& lobby() const { return lobby_; }
     bool is_leader() const;
     bool is_spectator() const;
-    // Players from the latest snapshot while our lobby plays; each entity id is a slot.
+    // Players from the latest complete frame while our lobby plays; each entity id is a slot.
     const std::vector<protocol::Entity>& players() const { return players_; }
+    // Every entity of the latest complete frame (players, enemies, shots, items).
+    const std::vector<protocol::Entity>& entities() const { return entities_; }
+    // Bodies that died since the last call (EntityDied), for the explosions.
+    std::vector<protocol::Entity> take_deaths();
 
     void create(const std::string& name);
     // Lower case is accepted.
@@ -71,6 +75,8 @@ private:
     void receive();
     void handle(const std::vector<std::uint8_t>& bytes);
     void on_state(const protocol::LobbyState& state);
+    void on_snapshot(const protocol::Packet& packet);
+    void clear_world();
     void request(const std::function<std::vector<std::uint8_t>()>& make, std::function<bool()> done,
                  bool entering = false, std::optional<std::string> code = std::nullopt);
     void reset();
@@ -84,6 +90,12 @@ private:
     std::vector<protocol::LobbyInfo> lobbies_;
     std::optional<protocol::LobbyState> lobby_;
     std::vector<protocol::Entity> players_;
+    std::vector<protocol::Entity> entities_;
+    std::vector<protocol::Entity> deaths_;
+    // The frame being put together from its parts, and the last one shown.
+    std::uint32_t building_frame_ = 0;
+    std::vector<std::optional<std::vector<protocol::Entity>>> building_parts_;
+    std::optional<std::uint32_t> shown_frame_;
     std::optional<Pending> pending_;
     std::string left_code_;      // The lobby we last left: its late states are ignored.
     bool list_received_ = false; // Confirms a leave.

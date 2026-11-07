@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Console.hpp"
+#include "GameData.hpp"
 #include "Lobbies.hpp"
 #include "NetworkThread.hpp"
 #include "Protocol.hpp"
@@ -28,8 +29,10 @@ struct Client {
 // main thread; all socket work happens on the NetworkThread.
 class Server {
 public:
-    // Port 0 binds any free port (see port()).
-    explicit Server(std::uint16_t port);
+    // Port 0 binds any free port (see port()). Loads the game data from the
+    // assets folder; throws std::runtime_error if it cannot. With `no_enemies`,
+    // games have no levels: ships only (for network tests).
+    explicit Server(std::uint16_t port, bool no_enemies = false);
 
     // Runs the fixed-rate loop until `running` becomes false.
     void run(const std::atomic<bool>& running);
@@ -48,6 +51,7 @@ private:
     void send_state(Lobby& lobby);
     void send_to_members(const Lobby& lobby, const std::vector<std::uint8_t>& data);
 
+    GameData data_; // Loaded once, before the lobbies that use it.
     NetworkThread network_;
     Console* console_ = nullptr;
     Lobbies lobbies_;

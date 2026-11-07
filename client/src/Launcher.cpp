@@ -20,7 +20,9 @@
 
 #include "BackgroundConfig.hpp"
 #include "Protocol.hpp"
+#include "PlayerColors.hpp"
 #include "UiClickSound.hpp"
+#include "UiFont.hpp"
 
 namespace ntype::client {
 namespace {
@@ -32,19 +34,9 @@ struct Field {
 };
 
 std::optional<sf::Font> load_font() {
-    const std::array<const char*, 5> paths{
-#ifdef _WIN32
-        "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
-#else
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-#endif
-        "/usr/local/share/fonts/DejaVuSans.ttf", "DejaVuSans.ttf", "Arial.ttf"};
-    for (const auto* path : paths) {
-        sf::Font font;
-        if (font.loadFromFile(path)) return font;
-    }
-    return std::nullopt;
+    sf::Font font;
+    if (!load_ui_font(font)) return std::nullopt;
+    return font;
 }
 
 void draw_text(sf::RenderWindow& window, const sf::Font& font, const std::string& value,
@@ -118,10 +110,6 @@ sf::FloatRect current_view_bounds(const sf::RenderWindow& window) {
 std::string truncated(const std::string& text, const std::size_t limit) {
     return text.size() > limit ? text.substr(0, limit - 3) + "..." : text;
 }
-
-// Same order as the player ids 1 to 4: blue, orange, green, pink.
-const std::array<sf::Color, 4> kPlayerColors{
-    sf::Color(66, 135, 245), sf::Color(245, 150, 40), sf::Color(80, 190, 90), sf::Color(240, 110, 180)};
 
 } // namespace
 
@@ -564,7 +552,7 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
                 gui.surface(window, row, true);
                 sf::RectangleShape colour({14.f, 14.f});
                 colour.setPosition(row.left + 10.f, row.top + 7.f);
-                colour.setFillColor(kPlayerColors[(member.slot - 1U) % kPlayerColors.size()]);
+                colour.setFillColor(player_color(member.slot));
                 window.draw(colour);
                 std::string name = member.name;
                 if (member.slot == lobby.yourSlot) name += " (toi)";

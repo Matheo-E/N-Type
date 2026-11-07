@@ -62,6 +62,8 @@ EnemyData ReadEnemy(const nlohmann::json& item) {
     data.Name = item.value("name", data.Name);
     data.Hp = item.value("hp", data.Hp);
     data.ContactDamage = item.value("contact_damage", data.ContactDamage);
+    data.Score = item.value("score", data.Score);
+    data.Boss = item.value("boss", data.Boss);
     data.Radius = item.value("radius", data.Radius);
     data.Speed = item.value("speed", data.Speed);
     data.FireInterval = item.value("fire_interval", data.FireInterval);
@@ -111,8 +113,7 @@ AttackPattern ReadAttack(const nlohmann::json& item) {
     pattern.Lifetime = item.value("lifetime", pattern.Lifetime);
     pattern.FlightPatternId = item.value("flight_pattern", pattern.FlightPatternId);
     if (item.contains("sprite")) {
-        ReadSprite(item.at("sprite"), pattern.TextureId, pattern.Source, pattern.Scale);
-        pattern.FlipX = item.at("sprite").value("flip_x", pattern.FlipX);
+        ReadLook(item.at("sprite"), pattern);
     }
     return pattern;
 }

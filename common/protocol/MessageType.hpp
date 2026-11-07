@@ -32,6 +32,17 @@ enum class MessageType : uint8_t {
     LobbyState = 19,
     LobbyRename = 20,
     LobbyStart = 21,
+    EntityDied = 22,
+};
+
+// What an entity is. Its `type` then says which one: the enemy type in
+// enemies.json, the attack pattern of a shot, or the item type.
+enum class EntityKind : uint8_t {
+    Player = 1,
+    Enemy = 2,
+    PlayerShot = 3,
+    EnemyShot = 4,
+    Item = 5,
 };
 
 enum class RefuseReason : uint8_t {
@@ -48,6 +59,13 @@ enum class LobbyRefuseReason : uint8_t {
 enum class LobbyPhase : uint8_t {
     Waiting = 1,
     Playing = 2
+};
+
+// How the lobby's last game ended, shown on the results screen.
+enum class GameResult : uint8_t {
+    None = 0,    // no game ended yet, or a new one is running
+    Defeat = 1,  // every player died (game over)
+    Victory = 2  // the last boss died
 };
 
 enum class MemberRole : uint8_t {

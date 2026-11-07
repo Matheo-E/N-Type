@@ -8,8 +8,10 @@
       "angle": 90,
       "speed": 600,
       "damage": 1,
-      "radius": 4,
-      "lifetime": 10
+      "radius": 6,
+      "lifetime": 10,
+      "sprite": { "texture": 22, "rect": [0, 0, 724, 724], "scale": 0.065,
+                  "animation": { "frames": [0, 1, 2, 1], "frame_time": 0.08 } }
     },
     {
       "id": 1,

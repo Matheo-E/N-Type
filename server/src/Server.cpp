@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <random>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 
 #include "GameConfig.hpp"
@@ -20,9 +22,23 @@ constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
 constexpr std::uint32_t kStateEvery = 6; // ticks: 10 lobby states per second
 
+GameData load_or_throw(const bool no_enemies) {
+    GameData data;
+    if (no_enemies) {
+        return data;
+    }
+    std::string error;
+    if (!load_game_data(data, NTYPE_ASSET_DIR, error)) {
+        throw std::runtime_error("game data: " + error);
+    }
+    return data;
+}
+
 } // namespace
 
-Server::Server(const std::uint16_t port) : network_(port) {
+Server::Server(const std::uint16_t port, const bool no_enemies)
+    : data_(load_or_throw(no_enemies)), network_(port), lobbies_(std::random_device{}(), data_) {
+    std::cout << "[server] " << data_.levels.size() << " levels loaded" << std::endl;
     std::cout << "[server] listening on UDP port " << network_.port() << std::endl;
 }
 
@@ -51,7 +67,12 @@ void Server::tick() {
     for (auto& [code, lobby] : lobbies_.all()) {
         if (lobby.phase() == protocol::LobbyPhase::Playing) {
             lobby.step(kDt);
-            send_to_members(lobby, protocol::makeWorldSnapshot(lobby.snapshot()));
+            for (const protocol::Entity& body : lobby.take_deaths()) {
+                send_to_members(lobby, protocol::makeEntityDied(body));
+            }
+            for (const auto& part : protocol::makeWorldSnapshots(lobby.next_frame(), lobby.snapshot())) {
+                send_to_members(lobby, part);
+            }
         }
         if (send_states) {
             send_state(lobby);
@@ -227,13 +248,25 @@ void Server::run_command(const std::string& line) {
     std::transform(code.begin(), code.end(), code.begin(),
                    [](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
     Lobby* lobby = lobbies_.find(code);
-    if ((command != "level" && command != "gameover") || !lobby) {
-        std::cout << "[server] unknown command: " << line << " (level <code> | gameover <code>)" << std::endl;
+    if ((command != "level" && command != "gameover" && command != "score") || !lobby) {
+        std::cout << "[server] unknown command: " << line
+                  << " (level <code> | gameover <code> | score <code> <slot> <points>)" << std::endl;
         return;
     }
-    if (command == "level") {
-        lobby->on_level_start();
-        std::cout << "[server] level started in " << code << std::endl;
+    if (command == "score") {
+        // Until enemies exist: gives points by hand to try the score display.
+        unsigned slot = 0;
+        std::uint32_t points = 0;
+        if (!(words >> slot >> points) || slot < 1 || slot > config::kMaxPlayers ||
+            !lobby->add_score(static_cast<std::uint8_t>(slot), points)) {
+            std::cout << "[server] usage: score <code> <slot 1-4 of a member> <points>" << std::endl;
+            return;
+        }
+        std::cout << "[server] slot " << slot << " +" << points << " in " << code << std::endl;
+    } else if (command == "level") {
+        // Skips to the next level (stays on the last one): spectators get a ship.
+        lobby->advance_level();
+        std::cout << "[server] next level in " << code << std::endl;
     } else {
         lobby->end_game();
         std::cout << "[server] game over in " << code << std::endl;

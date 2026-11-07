@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 #include "Component.hpp"
 #include "EnemyData.hpp"
@@ -23,6 +24,10 @@ public:
     std::unordered_map<int, AttackPattern> AttackPatterns;
     std::unordered_map<int, FlightPattern> FlightPatterns;
     std::unordered_map<int, AllTexture> Textures;
+
+    // What died, oldest first. Collision adds to it; the game reads it (scores,
+    // explosions) and clears it. Not per-entity, so not touched by Destroy.
+    std::vector<EDeath> Deaths;
 
     // Space
     std::unordered_map<int, EPosition> Positions;

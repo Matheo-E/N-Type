@@ -10,6 +10,10 @@ add_executable(r-type_client
     src/Launcher.cpp
     src/ControlsMenu.cpp
     src/ClientApp.cpp
+    src/ExplosionEffects.cpp
+    src/ImpactSounds.cpp
+    src/Hud.cpp
+    src/ResultsScreen.cpp
 )
 target_link_libraries(r-type_client PRIVATE ntype_client_core)
 if(MSVC)

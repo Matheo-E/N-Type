@@ -11,7 +11,8 @@ namespace ntype::server {
 using protocol::LobbyPhase;
 using protocol::MemberRole;
 
-Lobby::Lobby(std::string code, std::string name) : code_(std::move(code)), name_(std::move(name)) {}
+Lobby::Lobby(std::string code, std::string name, const GameData& data)
+    : data_(&data), code_(std::move(code)), name_(std::move(name)) {}
 
 bool Lobby::has(const ClientId client) const {
     return std::any_of(members_.begin(), members_.end(), [client](const Member& m) { return m.client == client; });
@@ -74,9 +75,11 @@ bool Lobby::start(const ClientId by) {
         return false;
     }
     phase_ = LobbyPhase::Playing;
-    game_.emplace();
+    result_ = protocol::GameResult::None; // the last results are gone once a new game starts
+    game_.emplace(*data_);
     for (auto& member : members_) {
         member.role = MemberRole::Player;
+        member.score = 0;
         game_->add_ship(member.slot);
     }
     return true;
@@ -94,12 +97,34 @@ void Lobby::on_level_start() {
     }
 }
 
-void Lobby::end_game() {
+bool Lobby::advance_level() {
+    if (!game_) {
+        return false;
+    }
+    game_->next_level();
+    on_level_start();
+    return true;
+}
+
+void Lobby::end_game(const protocol::GameResult result) {
+    if (game_) {
+        level_reached_ = static_cast<std::uint8_t>(game_->level() + 1);
+    }
+    result_ = result;
     phase_ = LobbyPhase::Waiting;
     game_.reset();
     for (auto& member : members_) {
         member.role = MemberRole::Player;
     }
+}
+
+bool Lobby::add_score(const std::uint8_t slot, const std::uint32_t points) {
+    const auto it = std::find_if(members_.begin(), members_.end(), [slot](const Member& m) { return m.slot == slot; });
+    if (it == members_.end()) {
+        return false;
+    }
+    it->score += points;
+    return true;
 }
 
 void Lobby::set_input(const ClientId client, const std::uint8_t keys) {
@@ -110,8 +135,52 @@ void Lobby::set_input(const ClientId client, const std::uint8_t keys) {
 }
 
 void Lobby::step(const float dt) {
-    if (game_) {
-        game_->step(dt);
+    if (!game_) {
+        return;
+    }
+    game_->step(dt);
+    for (const GameEvent& event : game_->take_events()) {
+        if (event.kind == GameEvent::Kind::Died) {
+            deaths_.push_back(event.body); // Shown even if the game ends in this step.
+        } else if (game_) {
+            apply(event);
+        }
+    }
+}
+
+std::vector<protocol::Entity> Lobby::take_deaths() {
+    std::vector<protocol::Entity> deaths;
+    deaths.swap(deaths_);
+    return deaths;
+}
+
+void Lobby::apply(const GameEvent& event) {
+    switch (event.kind) {
+    case GameEvent::Kind::Scored:
+        add_score(event.slot, event.points);
+        break;
+    case GameEvent::Kind::PlayerDied: {
+        const auto it = std::find_if(members_.begin(), members_.end(),
+                                     [&event](const Member& m) { return m.slot == event.slot; });
+        if (it != members_.end()) {
+            it->role = MemberRole::Spectator; // Watches until the next level.
+        }
+        const bool alive = std::any_of(members_.begin(), members_.end(),
+                                       [](const Member& m) { return m.role == MemberRole::Player; });
+        if (!alive) {
+            end_game(); // Game over: everyone is dead.
+        }
+        break;
+    }
+    case GameEvent::Kind::LevelCleared:
+        if (game_->next_level()) {
+            on_level_start();
+        } else {
+            end_game(protocol::GameResult::Victory); // The last boss is dead: the game is won.
+        }
+        break;
+    case GameEvent::Kind::Died:
+        break; // Collected in step().
     }
 }
 
@@ -129,11 +198,13 @@ protocol::LobbyState Lobby::state_for(const ClientId client) const {
         if (member.client == client) {
             state.yourSlot = member.slot;
         }
-        state.members.push_back({member.slot, member.role, member.name});
+        state.members.push_back({member.slot, member.role, member.name, member.score});
     }
     if (!members_.empty()) {
         state.leaderSlot = members_.front().slot;
     }
+    state.level = game_ ? static_cast<std::uint8_t>(game_->level() + 1) : level_reached_;
+    state.result = result_;
     return state;
 }
 

@@ -6,6 +6,7 @@
 */
 
 #include "Protocol.hpp"
+#include <algorithm>
 #include <stdexcept>
 
 namespace protocol {
@@ -95,6 +96,35 @@ struct Reader {
             return 0;
         }
         return data[position++];
+    }
+
+    uint16_t u16()
+    {
+        const uint16_t low = byte();
+        return static_cast<uint16_t>(low | (byte() << 8));
+    }
+
+    // An entity as written by writeEntity; ok becomes false on a bad kind or hp.
+    Entity entity()
+    {
+        Entity entity;
+        entity.id = u16();
+        entity.kind = byteIn(1, 5);
+        entity.type = byte();
+        entity.hp = byteIn(0, 100);
+        entity.hits = byte();
+        entity.x = static_cast<int32_t>(u32());
+        entity.y = static_cast<int32_t>(u32());
+        return entity;
+    }
+
+    // Reads a little-endian uint32_t.
+    uint32_t u32()
+    {
+        uint32_t value = 0;
+        for (int shift = 0; shift < 32; shift += 8)
+            value |= static_cast<uint32_t>(byte()) << shift;
+        return value;
     }
 
     // Reads a byte that must be within [low, high].
@@ -193,19 +223,55 @@ std::vector<uint8_t> makeEntityDestroy(uint16_t id)
     return data;
 }
 
-std::vector<uint8_t> makeWorldSnapshot(const std::vector<Entity>& entities)
+static void writeEntity(std::vector<uint8_t>& data, const Entity& entity)
 {
-    // Keep one datagram reasonably small for this MVP.
-    if (entities.size() > 100)
-        throw std::invalid_argument("Too many entities in snapshot");
+    write16(data, entity.id);
+    data.push_back(entity.kind);
+    data.push_back(entity.type);
+    data.push_back(entity.hp);
+    data.push_back(entity.hits);
+    write32(data, entity.x);
+    write32(data, entity.y);
+}
 
-    std::vector<uint8_t> data = {messageId(MessageType::WorldSnapshot), static_cast<uint8_t>(entities.size())};
-    for (const Entity& entity : entities) {
-        write16(data, entity.id);
-        data.push_back(entity.kind);
-        write32(data, entity.x);
-        write32(data, entity.y);
+std::vector<uint8_t> makeWorldSnapshot(uint32_t frame, uint8_t part, uint8_t parts,
+                                       const std::vector<Entity>& entities)
+{
+    if (entities.size() > kMaxSnapshotEntities)
+        throw std::invalid_argument("Too many entities in one snapshot part");
+    if (parts == 0 || parts > kMaxSnapshotParts || part >= parts)
+        throw std::invalid_argument("Invalid snapshot part");
+
+    std::vector<uint8_t> data = {messageId(MessageType::WorldSnapshot)};
+    write32(data, static_cast<int32_t>(frame));
+    data.push_back(part);
+    data.push_back(parts);
+    data.push_back(static_cast<uint8_t>(entities.size()));
+    for (const Entity& entity : entities)
+        writeEntity(data, entity);
+    return data;
+}
+
+std::vector<std::vector<uint8_t>> makeWorldSnapshots(uint32_t frame, const std::vector<Entity>& entities)
+{
+    const size_t parts = std::max<size_t>(1, (entities.size() + kMaxSnapshotEntities - 1) / kMaxSnapshotEntities);
+    if (parts > kMaxSnapshotParts)
+        throw std::invalid_argument("Too many entities in snapshot");
+    std::vector<std::vector<uint8_t>> packets;
+    for (size_t part = 0; part < parts; part++) {
+        const auto first = entities.begin() + static_cast<std::ptrdiff_t>(part * kMaxSnapshotEntities);
+        const auto last = entities.begin() +
+            static_cast<std::ptrdiff_t>(std::min(entities.size(), (part + 1) * kMaxSnapshotEntities));
+        packets.push_back(makeWorldSnapshot(frame, static_cast<uint8_t>(part), static_cast<uint8_t>(parts),
+                                            std::vector<Entity>(first, last)));
     }
+    return packets;
+}
+
+std::vector<uint8_t> makeEntityDied(const Entity& entity)
+{
+    std::vector<uint8_t> data = {messageId(MessageType::EntityDied)};
+    writeEntity(data, entity);
     return data;
 }
 
@@ -277,12 +343,15 @@ std::vector<uint8_t> makeLobbyState(const LobbyState& lobby)
     writeCode(data, lobby.code);
     writeString(data, lobby.name, kMaxLobbyName);
     data.push_back(static_cast<uint8_t>(lobby.state));
+    data.push_back(lobby.level);
+    data.push_back(static_cast<uint8_t>(lobby.result));
     data.push_back(lobby.yourSlot);
     data.push_back(lobby.leaderSlot);
     data.push_back(static_cast<uint8_t>(lobby.members.size()));
     for (const LobbyMember& member : lobby.members) {
         data.push_back(member.slot);
         data.push_back(static_cast<uint8_t>(member.role));
+        write32(data, static_cast<int32_t>(member.score));
         writeString(data, member.name, kMaxPlayerName);
     }
     return data;
@@ -347,7 +416,7 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
             break;
 
         case MessageType::EntitySpawn:
-            if (data.size() != 12 || data[3] < 1 || data[3] > 4)
+            if (data.size() != 12 || data[3] < 1 || data[3] > 5)
                 return std::nullopt;
             packet.id = read16(data, 1);
             packet.value = data[3];
@@ -362,20 +431,25 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
             break;
 
         case MessageType::WorldSnapshot: {
-            if (data.size() < 2 || data[1] > 100 ||
-                data.size() != 2 + static_cast<size_t>(data[1]) * 11)
+            Reader reader{data};
+            packet.frame = reader.u32();
+            packet.part = reader.byte();
+            packet.parts = reader.byteIn(1, static_cast<uint8_t>(kMaxSnapshotParts));
+            const uint8_t count = reader.byteIn(0, static_cast<uint8_t>(kMaxSnapshotEntities));
+            if (packet.part >= packet.parts)
                 return std::nullopt;
-            for (size_t i = 0; i < data[1]; i++) {
-                size_t pos = 2 + i * 11;
-                if (data[pos + 2] < 1 || data[pos + 2] > 4)
-                    return std::nullopt;
-                Entity entity;
-                entity.id = read16(data, pos);
-                entity.kind = data[pos + 2];
-                entity.x = readPosition(data, pos + 3);
-                entity.y = readPosition(data, pos + 7);
-                packet.entities.push_back(entity);
-            }
+            for (size_t i = 0; i < count && reader.ok; i++)
+                packet.entities.push_back(reader.entity());
+            if (!reader.done())
+                return std::nullopt;
+            break;
+        }
+
+        case MessageType::EntityDied: {
+            Reader reader{data};
+            packet.entities.push_back(reader.entity());
+            if (!reader.done())
+                return std::nullopt;
             break;
         }
 
@@ -444,6 +518,8 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
             lobby.code = reader.code();
             lobby.name = reader.string(kMaxLobbyName);
             lobby.state = static_cast<LobbyPhase>(reader.byteIn(1, 2));
+            lobby.level = reader.byte();
+            lobby.result = static_cast<GameResult>(reader.byteIn(0, 2));
             lobby.yourSlot = reader.byteIn(1, 4);
             lobby.leaderSlot = reader.byteIn(1, 4);
             uint8_t count = reader.byteIn(1, static_cast<uint8_t>(kMaxMembers));
@@ -451,6 +527,7 @@ std::optional<Packet> decode(const std::vector<uint8_t>& data)
                 LobbyMember member;
                 member.slot = reader.byteIn(1, 4);
                 member.role = static_cast<MemberRole>(reader.byteIn(1, 2));
+                member.score = reader.u32();
                 member.name = reader.string(kMaxPlayerName);
                 lobby.members.push_back(member);
             }

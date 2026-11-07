@@ -21,9 +21,10 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
     dt = std::min(dt, 0.05f);  // a long stall (dragging the window) must not teleport things
     window.clear(sf::Color::Black);
     world.Actions.Update(world.Keys);
-    MoveInput(world, playerid);
-    Spawner(world, dt, playerid);  // before Flight, so new bullets start on their flight pattern
-    Flight(world, dt, playerid);
+    ReadKeyboard(world, playerid);
+    MoveInput(world);
+    Spawner(world, dt);  // before Flight, so new bullets start on their flight pattern
+    Flight(world, dt);
     Follow(world, dt);  // after Flight: a follower ignores any flight pattern it has
     Movement(world, dt);
     Collision(world);
@@ -35,25 +36,35 @@ void Action(World& world, sf::RenderWindow& window, float dt, int playerid) {
     window.display();
 }
 
-void MoveInput(World& world, int playerid) {
-    auto it = world.Velocities.find(playerid);
-    auto speed = world.Speeds.find(playerid);
-    if (it == world.Velocities.end() || speed == world.Speeds.end()) {
+void ReadKeyboard(World& world, int playerid) {
+    auto player = world.Players.find(playerid);
+    if (player == world.Players.end()) {
         return;
     }
-
     sf::Vector2f dir = {0.0f, 0.0f};
     if (world.Actions.IsDown(Action::MoveUp)) { dir.y -= 1.0f; }
     if (world.Actions.IsDown(Action::MoveDown)) { dir.y += 1.0f; }
     if (world.Actions.IsDown(Action::MoveLeft)) { dir.x -= 1.0f; }
     if (world.Actions.IsDown(Action::MoveRight)) { dir.x += 1.0f; }
+    player->second.Move = dir;
+    player->second.Shoot = world.Actions.IsDown(Action::Shoot);
+}
 
-    // No key held: dir is still {0, 0}, so the velocity becomes {0, 0}.
-    const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-    if (len > 0.0f) {
-        dir /= len;  // diagonals would otherwise be ~1.4x faster
+void MoveInput(World& world) {
+    for (auto& [id, player] : world.Players) {
+        auto it = world.Velocities.find(id);
+        auto speed = world.Speeds.find(id);
+        if (it == world.Velocities.end() || speed == world.Speeds.end()) {
+            continue;
+        }
+        // Nothing asked: dir is {0, 0}, so the velocity becomes {0, 0}.
+        sf::Vector2f dir = player.Move;
+        const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len > 0.0f) {
+            dir /= len;  // diagonals would otherwise be ~1.4x faster
+        }
+        it->second.Xy = dir * speed->second.Value;
     }
-    it->second.Xy = dir * speed->second.Value;
 }
 
 void Movement(World& world, float dt) {
@@ -92,7 +103,12 @@ void DrawSprite(World& world, sf::RenderWindow& window, int id) {
     sprite.setOrigin(bounds.width / 2, bounds.height / 2);  // the position is the centre
     sprite.setScale(look.FlipX ? -look.Scale.x : look.Scale.x, look.Scale.y);
     sprite.setPosition(pos->second.Xy);
+    sprite.setColor(look.Color);
     window.draw(sprite);
+    if (look.Flash.a > 0) {  // the same image again, its colour added: it lights up
+        sprite.setColor(look.Flash);
+        window.draw(sprite, sf::BlendAdd);
+    }
 }
 
 }  // namespace

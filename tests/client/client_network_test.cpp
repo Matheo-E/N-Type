@@ -22,7 +22,8 @@ namespace {
 
 // A real server on its own thread, like the r-type_server process.
 struct RunningServer {
-    explicit RunningServer(std::uint16_t port) : server(port), thread([this] { server.run(running); }) {}
+    // No enemies: these checks are about the session, not gameplay.
+    explicit RunningServer(std::uint16_t port) : server(port, true), thread([this] { server.run(running); }) {}
     ~RunningServer() {
         running = false;
         thread.join();
@@ -99,6 +100,86 @@ bool pump(std::initializer_list<ClientNetwork*> clients, const std::function<boo
         std::this_thread::sleep_for(5ms);
     }
     return false;
+}
+
+// A hand-driven server: the test decides every packet the client receives.
+class FakeServer {
+public:
+    FakeServer() : socket_(io_, asio::ip::udp::endpoint(asio::ip::make_address("127.0.0.1"), 0)) {
+        socket_.non_blocking(true);
+    }
+    std::uint16_t port() const { return socket_.local_endpoint().port(); }
+
+    // Reads what the client sent; remembers where to answer. Returns the message types.
+    std::vector<protocol::MessageType> receive() {
+        std::vector<protocol::MessageType> types;
+        std::array<std::uint8_t, 1500> bytes{};
+        std::error_code error;
+        for (;;) {
+            const std::size_t size = socket_.receive_from(asio::buffer(bytes), client_, 0, error);
+            if (error || size == 0) {
+                return types;
+            }
+            types.push_back(static_cast<protocol::MessageType>(bytes[0]));
+        }
+    }
+    void send(const std::vector<std::uint8_t>& bytes) {
+        std::error_code error;
+        socket_.send_to(asio::buffer(bytes), client_, 0, error);
+    }
+
+private:
+    asio::io_context io_;
+    asio::ip::udp::socket socket_;
+    asio::ip::udp::endpoint client_;
+};
+
+// A frame shows once all its parts are there, in any order; older parts are dropped.
+void snapshot_parts() {
+    FakeServer server;
+    ClientNetwork client("127.0.0.1", server.port(), "Me");
+    const auto settle = [&] {
+        for (int i = 0; i < 5; ++i) {
+            client.update(0);
+            std::this_thread::sleep_for(5ms);
+        }
+    };
+    settle();
+    assert(!server.receive().empty()); // the connect request
+    server.send(protocol::makeConnectAccept());
+    settle();
+    assert(client.phase() == Phase::Browsing);
+    client.create("Fake");
+    protocol::LobbyState state{"K7QX", "Fake", protocol::LobbyPhase::Playing, 1, 1,
+                               {{1, protocol::MemberRole::Player, "Me"}}};
+    server.receive();
+    server.send(protocol::makeLobbyState(state));
+    settle();
+    assert(client.phase() == Phase::InLobby);
+
+    const protocol::Entity ship{1, 1, 10, 20, 0, 100};
+    const protocol::Entity enemy{40, 2, 600, 300, 3, 50};
+    server.send(protocol::makeWorldSnapshot(5, 1, 2, {enemy}));
+    settle();
+    assert(client.entities().empty()); // half a frame: nothing yet
+    server.send(protocol::makeWorldSnapshot(5, 0, 2, {ship}));
+    settle();
+    assert(client.entities().size() == 2 && client.players().size() == 1 && client.players()[0].id == 1);
+
+    server.send(protocol::makeWorldSnapshot(4, 0, 1, {})); // older than what is shown
+    settle();
+    assert(client.entities().size() == 2);
+
+    server.send(protocol::makeWorldSnapshot(7, 0, 2, {ship})); // never completed...
+    server.send(protocol::makeWorldSnapshot(8, 0, 1, {enemy})); // ...a newer frame wins
+    server.send(protocol::makeWorldSnapshot(7, 1, 2, {enemy})); // late part: dropped
+    settle();
+    assert(client.entities().size() == 1 && client.entities()[0].id == 40 && client.players().empty());
+
+    server.send(protocol::makeEntityDied(enemy));
+    settle();
+    const std::vector<protocol::Entity> deaths = client.take_deaths();
+    assert(deaths.size() == 1 && deaths[0].id == 40 && deaths[0].type == 3 && client.take_deaths().empty());
 }
 
 std::string lower(std::string text) {
@@ -201,5 +282,6 @@ int main() {
     assert(pump({&b}, [&] { return b.phase() == Phase::Browsing; }, 3000ms));
     assert(!b.lobby());
 
+    snapshot_parts();
     std::cout << "ClientNetwork tests passed!\n";
 }

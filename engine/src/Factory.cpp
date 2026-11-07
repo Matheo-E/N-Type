@@ -89,7 +89,7 @@ int CreateEEnemy(World& world, sf::Vector2f pos, int enemyid) {
     const EnemyData& data = type->second;
     int id = CreateE(world);
 
-    world.Enemies.emplace(id, EEnemy{});
+    world.Enemies.emplace(id, EEnemy{enemyid});
     world.Names[id].Name = data.Name;
     world.Positions[id].Xy = pos;
     world.Velocities[id];
@@ -126,7 +126,7 @@ int CreateEBullet(World& world, int spawnerid) {
     auto where = world.Positions.find(spawnerid);
     int id = CreateE(world);
 
-    world.Bullets.emplace(id, EBullet{});
+    world.Bullets.emplace(id, EBullet{spawner->second.PatternId});
     world.Positions[id].Xy = where != world.Positions.end() ? where->second.Xy : sf::Vector2f(0, 0);
     world.Velocities[id].Xy = Direction(pattern.AngleDegrees) * pattern.Speed;
     world.OwnerIds[id].OId = spawnerid;
@@ -140,7 +140,7 @@ int CreateEBullet(World& world, int spawnerid) {
         world.Flights[id].Heading = pattern.AngleDegrees;
     }
     if (pattern.TextureId >= 0) {
-        AddSprite(world, id, Look(pattern.TextureId, pattern.Source, pattern.Scale, pattern.FlipX), ZBullet);
+        AddLook(world, id, pattern, ZBullet);
     }
     AddHitbox(world, id, pattern.Radius);
     SetLayer(world, id, fromplayer ? LayerPlayerBullet : LayerEnemyBullet,
@@ -188,4 +188,31 @@ int CreateEItem(World& world, sf::Vector2f pos, int itemid) {
         world.Lifetimes[id].Lifetime = data.Lifetime;
     }
     return id;
+}
+
+bool AddEnemyLook(World& world, int id, int enemyid) {
+    auto type = world.EnemyTypes.find(enemyid);
+    if (type == world.EnemyTypes.end()) {
+        return false;
+    }
+    AddLook(world, id, type->second, ZEnemy);
+    return true;
+}
+
+bool AddShotLook(World& world, int id, int patternid) {
+    auto pattern = world.AttackPatterns.find(patternid);
+    if (pattern == world.AttackPatterns.end() || pattern->second.TextureId < 0) {
+        return false;
+    }
+    AddLook(world, id, pattern->second, ZBullet);
+    return true;
+}
+
+bool AddItemLook(World& world, int id, int itemid) {
+    auto type = world.ItemTypes.find(itemid);
+    if (type == world.ItemTypes.end()) {
+        return false;
+    }
+    AddLook(world, id, type->second, ZEnemy);
+    return true;
 }

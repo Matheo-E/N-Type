@@ -87,13 +87,32 @@ float BulletAngle(const AttackPattern& pattern, float base, int i) {
     return base - pattern.SpreadDegrees / 2.0f + pattern.SpreadDegrees / (pattern.Count - 1) * i;
 }
 
-// Fires one volley from spawnerid. Aimed volleys are centred on the player.
-void Fire(World& world, int spawnerid, const AttackPattern& pattern, int playerid) {
+// The position of the player closest to `from`, or nothing if no player is on the map.
+// With several players, chasers and aimed shots go for the nearest one.
+const EPosition* NearestPlayer(World& world, sf::Vector2f from) {
+    const EPosition* nearest = nullptr;
+    float best = 0.0f;
+    for (auto& [id, player] : world.Players) {
+        auto pos = world.Positions.find(id);
+        if (pos == world.Positions.end()) {
+            continue;
+        }
+        const float distance = Length(pos->second.Xy - from);
+        if (nearest == nullptr || distance < best) {
+            nearest = &pos->second;
+            best = distance;
+        }
+    }
+    return nearest;
+}
+
+// Fires one volley from spawnerid. Aimed volleys are centred on the nearest player.
+void Fire(World& world, int spawnerid, const AttackPattern& pattern) {
     const sf::Vector2f from = world.Positions[spawnerid].Xy;
-    auto player = world.Positions.find(playerid);
+    const EPosition* player = NearestPlayer(world, from);
     float base = pattern.AngleDegrees;
-    if (pattern.Aimed && player != world.Positions.end()) {
-        base = AngleTo(from, player->second.Xy);
+    if (pattern.Aimed && player != nullptr) {
+        base = AngleTo(from, player->Xy);
     }
     for (int i = 0; i < pattern.Count; ++i) {
         const int bullet = CreateEBullet(world, spawnerid);
@@ -113,8 +132,8 @@ void Fire(World& world, int spawnerid, const AttackPattern& pattern, int playeri
 
 // Each entity with a flight pattern gets a new velocity every frame, from its pattern,
 // its own speed, and how long it has been flying. Movement then moves it.
-void Flight(World& world, float dt, int playerid) {
-    auto player = world.Positions.find(playerid);
+// Chasers head for the nearest player.
+void Flight(World& world, float dt) {
     for (auto& [id, flight] : world.Flights) {
         auto pattern = world.FlightPatterns.find(flight.PatternId);
         auto pos = world.Positions.find(id);
@@ -130,7 +149,8 @@ void Flight(World& world, float dt, int playerid) {
             vel->second.Xy = dt > 0.0f ? (target - pos->second.Xy) / dt : sf::Vector2f(0.0f, 0.0f);
             continue;
         }
-        const sf::Vector2f toplayer = player != world.Positions.end() ? player->second.Xy - pos->second.Xy : sf::Vector2f(0, 0);
+        const EPosition* player = NearestPlayer(world, pos->second.Xy);
+        const sf::Vector2f toplayer = player != nullptr ? player->Xy - pos->second.Xy : sf::Vector2f(0, 0);
         vel->second.Xy = FlightVelocity(pattern->second, flight, SpeedOf(world, id), toplayer);
     }
 }
@@ -160,18 +180,18 @@ void Follow(World& world, float dt) {
 }
 
 // Each spawner counts up; when it reaches its interval it fires its attack pattern.
-// The player's spawner only fires while the Shoot action is held (and is kept ready,
+// A player's spawner only fires while that player's Shoot is set (and is kept ready,
 // so the first shot is immediate). Bullets are created after the loop, because creating
 // entities while walking the spawners would not be safe.
-void Spawner(World& world, float dt, int playerid) {
-    const bool shooting = world.Actions.IsDown(Action::Shoot);
+void Spawner(World& world, float dt) {
     std::vector<int> firing;
     for (auto& [id, spawner] : world.Spawners) {
         spawner.Timer += dt;
         if (spawner.Interval <= 0.0f) {
             continue;
         }
-        if (world.Players.count(id) > 0 && !shooting) {
+        auto player = world.Players.find(id);
+        if (player != world.Players.end() && !player->second.Shoot) {
             spawner.Timer = std::min(spawner.Timer, spawner.Interval);
             continue;
         }
@@ -183,7 +203,7 @@ void Spawner(World& world, float dt, int playerid) {
     for (int id : firing) {
         auto pattern = world.AttackPatterns.find(world.Spawners[id].PatternId);
         if (pattern != world.AttackPatterns.end()) {
-            Fire(world, id, pattern->second, playerid);
+            Fire(world, id, pattern->second);
         }
     }
 }

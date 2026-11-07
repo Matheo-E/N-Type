@@ -32,9 +32,13 @@ def parse(kind, payload):
     if kind in (REFUSE, CLIENT_LEFT, LOBBY_REFUSE):
         return payload[0]
     if kind == SNAPSHOT:
+        # frame, part, parts, count, then 14-byte entities: id, kind, type, hp, hits, x, y.
+        # Without enemies a frame is one part holding only the ships.
+        frame, part, parts, count = struct.unpack_from('<IBBB', payload, 0)
+        assert (part, parts) == (0, 1)
         ships = {}
-        for index in range(payload[0]):
-            entity, entity_kind, x, y = struct.unpack_from('<HBii', payload, 1 + 11 * index)
+        for index in range(count):
+            entity, entity_kind, _, _, _, x, y = struct.unpack_from('<HBBBBii', payload, 7 + 14 * index)
             assert entity_kind == PLAYER_KIND
             ships[entity] = (x, y)
         return ships
@@ -49,14 +53,16 @@ def parse(kind, payload):
     if kind == STATE:
         code = payload[0:4].decode()
         name, pos = read_string(payload, 4)
-        state, your, leader, count = payload[pos:pos + 4]
-        pos += 4
-        members = []
+        state, level, result, your, leader, count = payload[pos:pos + 6]
+        pos += 6
+        members, scores = [], {}
         for _ in range(count):
-            slot, role = payload[pos:pos + 2]
-            member_name, pos = read_string(payload, pos + 2)
+            slot, role, score = struct.unpack_from('<BBI', payload, pos)
+            member_name, pos = read_string(payload, pos + 6)
             members.append((slot, role, member_name))
-        return dict(code=code, name=name, state=state, your=your, leader=leader, members=members)
+            scores[slot] = score
+        return dict(code=code, name=name, state=state, level=level, result=result, your=your, leader=leader, members=members,
+                    scores=scores)
     return None
 
 
@@ -120,7 +126,9 @@ def check(binary):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
         probe.bind(('127.0.0.1', 0))
         port = probe.getsockname()[1]
-    server = subprocess.Popen([binary, '-p', str(port)], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
+    # No enemies: these checks are about the network and the lobbies, not gameplay.
+    server = subprocess.Popen([binary, '-p', str(port), '--no-enemies'], stdin=subprocess.PIPE,
+                              stdout=subprocess.DEVNULL)
     peers = []
     stop = threading.Event()
 
@@ -207,10 +215,17 @@ def check(binary):
         assert role_of(c.wait(STATE, lambda s: role_of(s, 3) == PLAYER), 3) == PLAYER
         c.input(0)
 
-        # 7. Game over sends everyone back to the waiting room as players.
+        # Scores: the console gives points; every member sees them.
+        command('score ' + code + ' 2 150')
+        command('score ' + code + ' 2 50')
+        assert c.wait(STATE, lambda s: s['scores'].get(2) == 200)['scores'][1] == 0
+
+        # 7. Game over sends everyone back to the waiting room as players, scores kept.
         command('gameover ' + code)
         over = a.wait(STATE, lambda s: s['state'] == WAITING)
+        assert over['result'] == 1  # GameResult::Defeat, shown on the results screen
         assert all(role == PLAYER for _, role, _ in over['members'])
+        assert over['scores'][2] == 200
 
         # 8. When the leader leaves, the longest-present member leads.
         a.send(DISCONNECT)
@@ -263,7 +278,7 @@ def check(binary):
         e.silent = True
         assert len(d.wait(STATE, lambda s: len(s['members']) == 1, timeout=8)['members']) == 1
         assert server.poll() is None
-        print('PASS: lobby protocol, list, join by code, leader, spectators, level/gameover, leave,')
+        print('PASS: lobby protocol, list, join by code, leader, spectators, level/gameover, scores, leave,')
         print('      two lobbies, four screen edges, full server and timeout.')
     finally:
         stop.set()
