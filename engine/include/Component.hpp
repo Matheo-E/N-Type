@@ -207,6 +207,14 @@ public:
     float Time = 0;  // seconds left
 };
 
+class EPowerup {
+public:
+    float BurstTime = 0;
+    float BurstTimer = 0.6f;
+    int BurstRemaining = 0;
+    float GoldenTime = 0;
+};
+
 class ELifetime {
 public:
     float Lifetime = 0;  // seconds left; the entity is destroyed at 0

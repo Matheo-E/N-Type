@@ -25,6 +25,7 @@ public:
     int FlightPatternId = -1;  // -1: stays where it was dropped
     float Speed = 0;           // base speed for its flight pattern
     float Lifetime = 0;        // seconds before it disappears by itself; 0: never
+    float DropChance = 0;      // probability per non-boss kill; all items together <= 1
 
     // What it does to the player who picks it up. 0 (or -1 for ShootingType) means no change.
     int Heal = 0;
@@ -33,6 +34,8 @@ public:
     float FireInterval = 0;    // added to the seconds between shots: negative fires faster
     int ShootingType = -1;     // attack pattern the player fires from now on
     float Invincibility = 0;   // seconds of protection
+    float BurstDuration = 0;   // seconds of three-volley bursts
+    float GoldenDuration = 0;  // seconds using the golden player sprite
     int Attack = 0;            // added to the damage of the player's bullets
     int Defense = 0;           // removed from the damage the player takes
 };

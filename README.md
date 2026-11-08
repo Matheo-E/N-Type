@@ -145,6 +145,44 @@ Server terminal commands, to test without playing (the code is the lobby's room 
 - `score <code> <slot> <points>` — gives points to the member in that slot (1–4).
 
 `r-type_server --no-enemies` runs games with ships only; the network tests use it.
+Temporary gameplay testing: `./r-type_server --invincible` protects all players
+from damage, including after respawning. Restart without this flag for normal damage.
+
+## Items
+
+Normal player fire sends one volley every 0.35 seconds (about 2.9 per second).
+Each player projectile deals 2 damage, including double/triple/quadruple volleys.
+Each non-boss enemy killed by a player rolls independently for at most one pickup:
+
+| Item | Chance per kill | Effect | Time on map |
+|------|-----------------|--------|-------------|
+| Double nozzle | 2% | Two shots per volley | 20 s |
+| Triple nozzle | 0.5% | Three shots per volley | 18 s |
+| Quadruple nozzle | 0.1% | Four shots per volley | 16 s |
+| Toothbrush | 15% | Restores 1 HP, up to maximum health | 12 s |
+| Dental floss | 12% | Three-volley bursts for 10 seconds | 10 s |
+| Golden shield | 8% | Invincibility and golden player sprite for 10 seconds | 8 s |
+
+The remaining 62.4% of kills drop nothing. Items are displayed 80 pixels wide
+(previously 48), have a 30-pixel pickup radius, and drift left at 70 px/s. They
+also disappear when leaving the play area or changing levels. Bosses do not drop
+items because killing them immediately ends the level.
+
+Touch a pickup to collect it; only one player receives its effect. Nozzles replace
+the current shooting pattern, including when collecting a smaller nozzle, and last
+for that ship's life. Dental floss keeps the current nozzle and fires three volleys
+0.1 seconds apart, followed by a 0.6-second pause, while fire is held. After ten
+seconds, normal cadence returns. Another floss or shield refreshes its ten-second
+effect instead of adding durations. A respawn starts with the default weapon.
+
+The shield uses `sprites/player/tooth_golden.png` with the same 0 → 1 → 2 → 1
+animation and timing. The server sends the golden state in every snapshot, so
+other players and spectators see it too; the health-based sprite returns on expiry.
+
+Definitions, drop probabilities, map lifetimes and effects are in
+`assets/data/items.json`, sprite registrations in `textures.json`, and the three
+additional volleys in `attack_patterns.json` (20–22). `Game::drop_item` in
+`server/src/Game.cpp` performs the random roll.
 
 ## Files
 

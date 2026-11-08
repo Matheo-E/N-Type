@@ -32,6 +32,7 @@ namespace {
 
 
 constexpr int kPlayerTexture = 1;  // id of sprites/player/tooth.png in assets/data/textures.json
+constexpr int kGoldenTexture = 32; // same three animation frames as the normal tooth
 constexpr int kHaloTexture = 21;   // id of sprites/player/tooth_halo.png (tools/make_tooth_halo.py)
 // Halo frames are 4x smaller than the tooth's, plus 28 pixels of margin on each side.
 constexpr int kHaloFrameSize = 237;
@@ -352,7 +353,7 @@ void ClientApp::sync_world() {
     for (auto it = entities_.begin(); it != entities_.end();) {
         const auto found = current.find(it->first);
         if (found == current.end() || found->second->kind != it->second.kind ||
-            found->second->type != it->second.type) {
+            (it->second.kind != config::kPlayerKind && found->second->type != it->second.type)) {
             if (it->second.halo >= 0) world_.Destroy(it->second.halo);
             if (it->second.sprite >= 0) world_.Destroy(it->second.sprite);
             it = entities_.erase(it);
@@ -368,6 +369,7 @@ void ClientApp::sync_world() {
             on_hit(it->second, entity);
         }
         it->second.hits = entity.hits;
+        it->second.type = entity.type;
         if (entity.kind == config::kPlayerKind) set_player_look(it->second, entity.hp);
         // The server is authoritative: positions are copied, never simulated here. It gives
         // a player's top-left corner and the centre of everything else; the engine draws
@@ -446,11 +448,11 @@ void ClientApp::on_hit(Mirror& mirror, const protocol::Entity& entity) {
 
 /** @brief The tooth wears its damage: intact at full health, damaged, broken at 1 HP of 3. */
 void ClientApp::set_player_look(Mirror& mirror, const std::uint8_t hp) {
-    const int look = hp >= 100 ? 0 : hp > 34 ? 1 : 2;
+    const int look = mirror.type == protocol::kGoldenPlayer ? 3 : hp >= 100 ? 0 : hp > 34 ? 1 : 2;
     if (look == mirror.look || mirror.sprite < 0 || mirror.halo < 0) return;
     mirror.look = look;
-    world_.Sprites[mirror.sprite].TextureId = kToothLooks[look];
-    world_.Sprites[mirror.halo].TextureId = kHaloLooks[look];
+    world_.Sprites[mirror.sprite].TextureId = look == 3 ? kGoldenTexture : kToothLooks[look];
+    world_.Sprites[mirror.halo].TextureId = look == 3 ? kHaloTexture : kHaloLooks[look];
 }
 
 void ClientApp::update_impacts(const float elapsed_seconds) {

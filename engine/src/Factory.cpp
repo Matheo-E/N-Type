@@ -72,7 +72,7 @@ int CreateEPlayer(World& world, sf::Vector2f pos) {
     world.Speeds[id].Value = 200.0f;
     world.Healths[id].Hp = 3;
     world.Healths[id].MaxHp = 3;
-    world.Spawners[id].Interval = 0.15f;  // its attack pattern 0 is the player's shot
+    world.Spawners[id].Interval = 0.35f;  // about three volleys per second
     world.Spawners[id].PatternId = 0;
     AddSprite(world, id, Look(TexturePlayers, {67, 2, 32, 15}, 2.0f), ZPlayer);
     // Bullet hell: the part that can be hit is much smaller than the sprite.

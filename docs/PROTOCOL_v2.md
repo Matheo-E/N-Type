@@ -97,7 +97,7 @@ An entity has an **ID**, a **kind**, and an **(x, y)** position. The ID identifi
 
 - **IDs**: players are their lobby slot (1–4); every other entity has an ID from 5.
 - **Positions**: a player's (x, y) is the top-left corner of its 40×40 box; any other entity's is its centre.
-- **`type`** says which one: the enemy type (`enemies.json`), the attack pattern of a projectile (`attack_patterns.json`), or the item type (`items.json`); 0 for players. The client picks the sprite from it.
+- **`type`** says which one: the enemy type (`enemies.json`), the attack pattern of a projectile (`attack_patterns.json`), or the item type (`items.json`). For players, 0 is the normal appearance and 1 is the active golden shield; changing this value preserves the animation. The client picks the sprite from it.
 - **`hp`** is the health left, in percent of the maximum (0–100), for players and enemies; 0 for the others.
 - **`hits`** counts the hits the entity took (players and enemies), wrapping from 255 to 0. When it changes between two frames, the client shows an impact (flash and sound). A counter rather than a one-off event, so a lost packet cannot hide a hit.
 

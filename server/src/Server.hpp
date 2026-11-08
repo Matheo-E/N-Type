@@ -32,7 +32,7 @@ public:
     // Port 0 binds any free port (see port()). Loads the game data from the
     // assets folder; throws std::runtime_error if it cannot. With `no_enemies`,
     // games have no levels: ships only (for network tests).
-    explicit Server(std::uint16_t port, bool no_enemies = false);
+    explicit Server(std::uint16_t port, bool no_enemies = false, bool invincible = false);
 
     // Runs the fixed-rate loop until `running` becomes false.
     void run(const std::atomic<bool>& running);

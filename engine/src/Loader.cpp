@@ -1,6 +1,7 @@
 #include "../include/Loader.hpp"
 
 #include <fstream>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -83,6 +84,7 @@ ItemData ReadItem(const nlohmann::json& item) {
     data.FlightPatternId = item.value("flight_pattern", data.FlightPatternId);
     data.Speed = item.value("speed", data.Speed);
     data.Lifetime = item.value("lifetime", data.Lifetime);
+    data.DropChance = item.value("drop_chance", data.DropChance);
     if (item.contains("sprite")) {
         ReadLook(item.at("sprite"), data);
     }
@@ -94,6 +96,8 @@ ItemData ReadItem(const nlohmann::json& item) {
         data.FireInterval = effects.value("fire_interval", data.FireInterval);
         data.ShootingType = effects.value("shooting_type", data.ShootingType);
         data.Invincibility = effects.value("invincibility", data.Invincibility);
+        data.BurstDuration = effects.value("burst_duration", data.BurstDuration);
+        data.GoldenDuration = effects.value("golden_duration", data.GoldenDuration);
         data.Attack = effects.value("attack", data.Attack);
         data.Defense = effects.value("defense", data.Defense);
     }
@@ -222,10 +226,23 @@ bool LoadEnemies(World& world, const std::string& path) {
 }
 
 bool LoadItems(World& world, const std::string& path) {
-    return ReadList(path, "items", [&world](const nlohmann::json& item) {
+    if (!ReadList(path, "items", [&world](const nlohmann::json& item) {
         world.ItemTypes[item.at("id").get<int>()] = ReadItem(item);
         return true;
-    });
+    })) return false;
+    float total = 0;
+    for (const auto& [id, item] : world.ItemTypes) {
+        if (!std::isfinite(item.DropChance) || item.DropChance < 0 || item.DropChance > 1) {
+            std::cerr << path << ": invalid drop_chance for item " << id << '\n';
+            return false;
+        }
+        total += item.DropChance;
+    }
+    if (total > 1.0f) {
+        std::cerr << path << ": combined drop chances exceed 1\n";
+        return false;
+    }
+    return true;
 }
 
 bool LoadAttackPatterns(World& world, const std::string& path) {

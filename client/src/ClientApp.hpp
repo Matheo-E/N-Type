@@ -108,7 +108,7 @@ private:
         std::uint8_t hits = 0;  // the server's hit counter: a change is a new impact
         float flash = 0.f;      // seconds of hit flash left
         float blink = 0.f;      // seconds of blinking left (a player just hit)
-        int look = -1;          // player: 0 intact, 1 damaged, 2 broken
+        int look = -1;          // player: 0 intact, 1 damaged, 2 broken, 3 golden
     };
     void add_mirror(Mirror& mirror, const protocol::Entity& entity);
     void on_hit(Mirror& mirror, const protocol::Entity& entity);

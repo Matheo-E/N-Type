@@ -191,6 +191,27 @@ void Spawner(World& world, float dt) {
             continue;
         }
         auto player = world.Players.find(id);
+        auto boost = world.Powerups.find(id);
+        if (player != world.Players.end() && boost != world.Powerups.end() && boost->second.BurstTime > 0) {
+            EPowerup& powerup = boost->second;
+            // Three volleys 0.1 s apart, then a 0.6 s pause. Releasing fire cancels
+            // the pending burst; normal cadence is preserved for when the bonus expires.
+            spawner.Timer = std::min(spawner.Timer, spawner.Interval);
+            powerup.BurstTimer += dt;
+            if (!player->second.Shoot) {
+                powerup.BurstRemaining = 0;
+                powerup.BurstTimer = std::min(powerup.BurstTimer, 0.6f);
+                continue;
+            }
+            const float interval = powerup.BurstRemaining > 0 ? 0.1f : 0.6f;
+            if (powerup.BurstTimer >= interval) {
+                powerup.BurstTimer = 0;
+                if (powerup.BurstRemaining == 0) powerup.BurstRemaining = 3;
+                --powerup.BurstRemaining;
+                firing.push_back(id);
+            }
+            continue;
+        }
         if (player != world.Players.end() && !player->second.Shoot) {
             spawner.Timer = std::min(spawner.Timer, spawner.Interval);
             continue;
@@ -210,6 +231,17 @@ void Spawner(World& world, float dt) {
 
 // Counts the lifetimes down and removes what has expired. Also ends invincibility.
 void Timers(World& world, float dt) {
+    for (auto it = world.Powerups.begin(); it != world.Powerups.end();) {
+        auto& boost = it->second;
+        boost.BurstTime = std::max(0.0f, boost.BurstTime - dt);
+        boost.GoldenTime = std::max(0.0f, boost.GoldenTime - dt);
+        if (boost.BurstTime == 0) {
+            boost.BurstRemaining = 0;
+            boost.BurstTimer = 0.6f;
+        }
+        if (boost.BurstTime == 0 && boost.GoldenTime == 0) it = world.Powerups.erase(it);
+        else ++it;
+    }
     std::vector<int> expired;
     for (auto& [id, life] : world.Lifetimes) {
         life.Lifetime -= dt;

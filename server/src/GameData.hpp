@@ -28,6 +28,7 @@ struct Level {
 struct GameData {
     World definitions; // enemy types, patterns and items; no entities
     std::vector<Level> levels;
+    bool invincible = false; // Temporary testing mode; all player ships are protected
 
     // No enemies and no levels: ships only (used when there is nothing to load, and by tests).
     static const GameData& none();

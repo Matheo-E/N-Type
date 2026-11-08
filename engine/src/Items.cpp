@@ -56,6 +56,14 @@ void ApplyItem(World& world, int id, int itemid) {
     if (item.Invincibility > 0.0f) {
         GiveInvincibility(world, id, item.Invincibility);
     }
+    if (item.BurstDuration > 0.0f && world.Spawners.count(id) > 0) {
+        auto& boost = world.Powerups[id];
+        boost.BurstTime = std::max(boost.BurstTime, item.BurstDuration);
+    }
+    if (item.GoldenDuration > 0.0f && world.Players.count(id) > 0) {
+        auto& boost = world.Powerups[id];
+        boost.GoldenTime = std::max(boost.GoldenTime, item.GoldenDuration);
+    }
     ChangeAttack(world, id, item.Attack);
     ChangeDefense(world, id, item.Defense);
 }

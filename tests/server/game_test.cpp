@@ -5,6 +5,7 @@
 #include <string>
 
 #include "Factory.hpp"
+#include "System.hpp"
 
 using ntype::server::Game;
 using ntype::server::GameData;
@@ -117,6 +118,46 @@ void player_dies()
         assert(entity.kind != 1); // only the enemy is left
 }
 
+void enemy_drops()
+{
+    const GameData data = definitions_only();
+    Game game(data);
+    game.add_ship(1);
+    const int player = ship_entity(game);
+    // Actual lethal collisions feed the server's drop logic and network snapshots.
+    for (int kill = 0; kill <= 6; ++kill) {
+        // Force each outcome, including "no drop", without a flaky random test.
+        for (auto& [type, item] : game.world().ItemTypes) item.DropChance = type == kill ? 1.0f : 0.0f;
+        CreateEEnemy(game.world(), {640, 360}, kChomper);
+        const int bullet = CreateEBullet(game.world(), player);
+        game.world().Positions[bullet].Xy = {640, 360};
+        game.world().Damages[bullet].Dmg = 100;
+        Collision(game.world());
+        game.step(0);
+        assert(game.world().Pickups.size() == static_cast<std::size_t>(kill));
+    }
+    bool seen[7] = {};
+    for (const auto& entity : game.snapshot()) {
+        if (entity.kind == static_cast<std::uint8_t>(protocol::EntityKind::Item)) {
+            assert(entity.type >= 1 && entity.type <= 6);
+            seen[entity.type] = true;
+        }
+    }
+    for (int type = 1; type <= 6; ++type) assert(seen[type]);
+    game.world().Positions[player].Xy = {640, 360};
+    game.world().Healths[player].Hp = 1;
+    game.step(0);
+    assert(game.world().Pickups.empty());
+    assert(game.world().Healths[player].Hp == 2);
+    assert(game.world().Powerups[player].BurstTime == 10);
+    assert(game.world().Invincibles.count(player) == 1);
+    assert(game.snapshot().front().type == protocol::kGoldenPlayer);
+    Timers(game.world(), 9.9f);
+    assert(game.snapshot().front().type == protocol::kGoldenPlayer);
+    Timers(game.world(), 0.2f);
+    assert(game.snapshot().front().type == 0);
+}
+
 // Killing the boss clears the level; the next one starts clean, until the last.
 void boss_clears_level()
 {
@@ -175,6 +216,7 @@ int main()
     waves_spawn();
     kill_scores();
     player_dies();
+    enemy_drops();
     boss_clears_level();
     std::cout << "Game tests passed!\n";
 }

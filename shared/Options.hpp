@@ -16,6 +16,7 @@ struct Options {
     std::uint16_t port = config::kDefaultPort;
     bool help = false;
     bool no_enemies = false; // Server: levels spawn nothing (network tests)
+    bool invincible = false; // Temporary server option for gameplay testing
 };
 
 enum class Application { Client, Server };
@@ -35,6 +36,8 @@ inline Options parse_options(int argc, char** argv, Application application) {
             options.host = argv[++index];
         } else if (arg == "--no-enemies" && application == Application::Server) {
             options.no_enemies = true;
+        } else if (arg == "--invincible" && application == Application::Server) {
+            options.invincible = true;
         } else if (arg == "-p" && index + 1 < argc) {
             const std::string_view text(argv[++index]);
             unsigned value = 0;

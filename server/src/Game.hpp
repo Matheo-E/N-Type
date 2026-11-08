@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <random>
 #include <vector>
 
 #include "GameData.hpp"
@@ -64,6 +65,7 @@ private:
 
     void spawn_waves();
     void read_deaths();
+    void drop_item(sf::Vector2f position);
     std::optional<std::uint8_t> slot_of(int entity) const;
     // How an enemy, shot or item is sent; nothing for anything else.
     std::optional<protocol::Entity> describe(int entity) const;
@@ -78,6 +80,7 @@ private:
     std::vector<int> spawned_; // per wave of the level: how many entered so far
     bool boss_spawned_ = false;
     int boss_ = -1;
+    std::mt19937 drop_random_{std::random_device{}()};
     std::vector<GameEvent> events_;
 };
 

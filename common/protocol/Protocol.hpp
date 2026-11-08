@@ -15,6 +15,7 @@
 #include <vector>
 
 namespace protocol {
+inline constexpr uint8_t kGoldenPlayer = 1; // player type while the golden shield is active
 
 // Limits checked by the encoder and the decoder.
 inline constexpr std::size_t kMaxPlayerName = 16;
@@ -36,7 +37,7 @@ struct Entity {
     uint8_t kind = 0;  // EntityKind: 1=player, 2=enemy, 3=player shot, 4=enemy shot, 5=item
     int32_t x = 0;
     int32_t y = 0;
-    uint8_t type = 0;  // enemy type, attack pattern or item type; 0 for players
+    uint8_t type = 0;  // enemy/shot/item type; player: 0 normal, kGoldenPlayer shield
     uint8_t hp = 0;    // health in percent of the maximum (players and enemies), else 0
     uint8_t hits = 0;  // counts every hit it took, wrapping at 256: a change means "just hit"
 };

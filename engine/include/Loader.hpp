@@ -12,7 +12,9 @@
 bool LoadEnemies(World& world, const std::string& path);
 
 // Item types -> world.ItemTypes. See ItemData.hpp for the keys; "effects" holds what the
-// item does: heal, max_hp, speed, fire_interval, shooting_type, invincibility, attack, defense.
+// item does: heal, max_hp, speed, fire_interval, shooting_type, invincibility,
+// burst_duration, golden_duration, attack, defense. drop_chance is the probability
+// per kill (0..1); the sum for all items must not exceed 1.
 bool LoadItems(World& world, const std::string& path);
 
 // Attack patterns -> world.AttackPatterns.

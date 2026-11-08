@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "Factory.hpp"
 #include "GameConfig.hpp"
@@ -52,6 +53,10 @@ void Game::add_ship(const std::uint8_t slot) {
     Ship ship;
     ship.entity = CreateEPlayer(world_, top_left + sf::Vector2f(kHalf, kHalf));
     world_.Speeds[ship.entity].Value = config::kPlayerSpeed;
+    if (data_.invincible) {
+        // Temporary test mode also covers respawns; golden shield visuals stay independent.
+        world_.Invincibles[ship.entity].Time = std::numeric_limits<float>::infinity();
+    }
     ships_.emplace(slot, ship);
 }
 
@@ -146,6 +151,10 @@ void Game::read_deaths() {
         if (death.EnemyType >= 0) {
             const auto type = world_.EnemyTypes.find(death.EnemyType);
             const auto slot = slot_of(death.Killer);
+            // Boss drops would be cleared immediately by the level transition.
+            if (slot && type != world_.EnemyTypes.end() && !type->second.Boss && death.Id != boss_) {
+                drop_item(death.Position);
+            }
             if (slot && type != world_.EnemyTypes.end() && type->second.Score > 0) {
                 events_.push_back({GameEvent::Kind::Scored, *slot, static_cast<std::uint32_t>(type->second.Score), {}});
             }
@@ -156,6 +165,23 @@ void Game::read_deaths() {
         }
     }
     world_.Deaths.clear();
+}
+
+void Game::drop_item(sf::Vector2f position) {
+    // One weighted roll per kill, with the remaining probability dropping nothing.
+    float roll = std::uniform_real_distribution<float>(0.0f, 1.0f)(drop_random_);
+    std::vector<int> types;
+    for (const auto& [id, item] : world_.ItemTypes) types.push_back(id);
+    std::sort(types.begin(), types.end());
+    position.x = std::clamp(position.x, kMinCentre, kMaxCentreX);
+    position.y = std::clamp(position.y, kMinCentre, kMaxCentreY);
+    for (int type : types) {
+        roll -= world_.ItemTypes.at(type).DropChance;
+        if (roll < 0) {
+            CreateEItem(world_, position, type);
+            break;
+        }
+    }
 }
 
 std::optional<std::uint8_t> Game::slot_of(const int entity) const {
@@ -241,6 +267,10 @@ std::vector<protocol::Entity> Game::snapshot() const {
                               static_cast<std::int32_t>(centre.y - kHalf)};
         body.hp = health_percent(ship.entity);
         body.hits = hits(ship.entity);
+        const auto boost = world_.Powerups.find(ship.entity);
+        if (boost != world_.Powerups.end() && boost->second.GoldenTime > 0) {
+            body.type = protocol::kGoldenPlayer;
+        }
         entities.push_back(body);
     }
     // The world's maps are unordered: sort the others by engine id, so a snapshot is

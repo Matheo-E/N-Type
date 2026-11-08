@@ -7,7 +7,7 @@
       "spread": 0,
       "angle": 90,
       "speed": 600,
-      "damage": 1,
+      "damage": 2,
       "radius": 6,
       "lifetime": 10,
       "sprite": { "texture": 22, "rect": [0, 0, 724, 724], "scale": 0.065,
@@ -113,6 +113,66 @@
       "radius": 14,
       "lifetime": 8.0,
       "sprite": { "texture": 19, "rect": [0,  0,  724,  724], "scale": 0.066298, "flip_x": true }
+    },
+    {
+      "id": 20,
+      "name": "player_2_shot",
+      "count": 2,
+      "spread": 8,
+      "angle": 90,
+      "speed": 600,
+      "damage": 2,
+      "radius": 6,
+      "lifetime": 10,
+      "sprite": {
+        "texture": 22,
+        "rect": [0, 0, 724, 724],
+        "scale": 0.065,
+        "animation": {
+          "frames": [0, 1, 2, 1],
+          "frame_time": 0.08
+        }
+      }
+    },
+    {
+      "id": 21,
+      "name": "player_3_shot",
+      "count": 3,
+      "spread": 16,
+      "angle": 90,
+      "speed": 600,
+      "damage": 2,
+      "radius": 6,
+      "lifetime": 10,
+      "sprite": {
+        "texture": 22,
+        "rect": [0, 0, 724, 724],
+        "scale": 0.065,
+        "animation": {
+          "frames": [0, 1, 2, 1],
+          "frame_time": 0.08
+        }
+      }
+    },
+    {
+      "id": 22,
+      "name": "player_4_shot",
+      "count": 4,
+      "spread": 24,
+      "angle": 90,
+      "speed": 600,
+      "damage": 2,
+      "radius": 6,
+      "lifetime": 10,
+      "sprite": {
+        "texture": 22,
+        "rect": [0, 0, 724, 724],
+        "scale": 0.065,
+        "animation": {
+          "frames": [0, 1, 2, 1],
+          "frame_time": 0.08
+        }
+      }
     }
   ]
 }

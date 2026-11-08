@@ -64,6 +64,7 @@ public:
     std::unordered_map<int, EHealth> Healths;
     std::unordered_map<int, EDamage> Damages;
     std::unordered_map<int, EInvincible> Invincibles;
+    std::unordered_map<int, EPowerup> Powerups;
     std::unordered_map<int, ELifetime> Lifetimes;
     std::unordered_map<int, ESpawner> Spawners;
 
@@ -105,6 +106,7 @@ public:
         Healths.erase(id);
         Damages.erase(id);
         Invincibles.erase(id);
+        Powerups.erase(id);
         Lifetimes.erase(id);
         Spawners.erase(id);
 
