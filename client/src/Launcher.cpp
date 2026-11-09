@@ -1,6 +1,7 @@
 #include "Launcher.hpp"
 #include "GuiSkin.hpp"
 #include "ControlsMenu.hpp"
+#include "PlayerProfile.hpp"
 
 #include <algorithm>
 #include <array>
@@ -501,8 +502,9 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
             gui.icon(window, {200, 2060, 185, 195}, {377.f, 135.f, 49.f, 51.f});
             gui.centered(window, *font, "MEILLEUR", {330.f, 202.f, 143.f, 24.f}, 15);
             gui.centered(window, *font, "SCORE", {330.f, 225.f, 143.f, 24.f}, 18);
-            gui.centered(window, *font, "--", {330.f, 254.f, 143.f, 36.f}, 30);
-            gui.centered(window, *font, "Bientot disponible", {330.f, 300.f, 143.f, 18.f}, 10, style::muted);
+            gui.centered(window, *font, std::to_string(PlayerProfile::shared().best_score(session->name())),
+                         {330.f, 254.f, 143.f, 36.f}, 24);
+            gui.centered(window, *font, "Record personnel", {330.f, 300.f, 143.f, 18.f}, 10, style::muted);
         } else if (page == Page::Lobbies) {
             const auto& lobbies = session->lobbies();
             gui.panel(window, *font, "Join lobby", panel);
@@ -545,7 +547,9 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
             gui.panel(window, *font, "Salle d'attente", panel);
             if (renaming) draw_field(rename_field, true);
             else gui.centered(window, *font, lobby.name, lobby_title, 20);
-            gui.centered(window, *font, "Code : " + lobby.code, {80.f, 136.f, 400.f, 22.f}, 15, style::muted);
+            gui.centered(window, *font, "Code : " + lobby.code + "   |   Ton record : " +
+                         std::to_string(PlayerProfile::shared().best_score(session->name())),
+                         {80.f, 136.f, 400.f, 22.f}, 13, style::muted);
             for (std::size_t i = 0; i < lobby.members.size(); ++i) {
                 const auto& member = lobby.members[i];
                 const sf::FloatRect row{100.f, 162.f + static_cast<float>(i) * 31.f, 360.f, 28.f};
@@ -576,6 +580,7 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
         gui.icon(window, {3090, 315, 185, 195}, settings_button);
         // Our own message first, then the server's refusal, then the connection state.
         std::string message = error;
+        if (message.empty()) message = PlayerProfile::shared().error();
         if (message.empty() && session) message = session->error();
         if (message.empty() && session && session->phase() == Phase::Connecting) message = session->status();
         if (!message.empty()) {

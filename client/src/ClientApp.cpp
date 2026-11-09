@@ -19,6 +19,7 @@
 #include "BackgroundConfig.hpp"
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
+#include "PlayerProfile.hpp"
 #include "System.hpp"
 #include "UiClickSound.hpp"
 #include "UiFont.hpp"
@@ -58,10 +59,6 @@ const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
 const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
 
-
-constexpr std::uint8_t bit(const protocol::InputType key) {
-    return static_cast<std::uint8_t>(key);
-}
 
 } // namespace
 
@@ -246,6 +243,12 @@ GameExitAction ClientApp::run() {
 void ClientApp::poll_events() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
+        sf::Event released = event;
+        if (event.type == sf::Event::KeyReleased) released.type = sf::Event::KeyPressed;
+        if (event.type == sf::Event::MouseButtonReleased) released.type = sf::Event::MouseButtonPressed;
+        if (event.type == sf::Event::JoystickButtonReleased) released.type = sf::Event::JoystickButtonPressed;
+        if (event.type == sf::Event::LostFocus ||
+            (released.type != event.type && PlayerProfile::shared().pause_event(released))) pause_held_ = false;
         if (controls_menu_.open && controls_menu_.handle_event(window_, event)) {
             continue;
         }
@@ -276,8 +279,13 @@ void ClientApp::poll_events() {
             if (event.type == sf::Event::Resized) update_view();
             continue;
         }
-        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
-            pause_menu_open_ = !pause_menu_open_;
+        // Left clicks on an open pause menu operate its buttons.
+        const bool menu_click = pause_menu_open_ && event.type == sf::Event::MouseButtonPressed &&
+                                event.mouseButton.button == sf::Mouse::Left;
+        if (!menu_click && window_.hasFocus() && PlayerProfile::shared().pause_event(event)) {
+            if (!pause_held_) pause_menu_open_ = !pause_menu_open_;
+            pause_held_ = true;
+            continue;
         }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
             window_state_.toggle_fullscreen(window_, "N-Type");
@@ -322,26 +330,43 @@ std::uint8_t ClientApp::read_input() const {
     if (!window_.hasFocus() || pause_menu_open_ || results_open_ || network_.is_spectator()) {
         return 0;
     }
-    using Key = sf::Keyboard::Key;
-    using protocol::InputType;
-    const auto pressed = [](const Key key) { return sf::Keyboard::isKeyPressed(key); };
-    std::uint8_t bits = 0;
-    if (pressed(Key::Up) || pressed(Key::W) || pressed(Key::Z)) {
-        bits |= bit(InputType::Up);
+    const auto& profile = PlayerProfile::shared();
+    ControlState state;
+    for (int key = 0; key < sf::Keyboard::KeyCount; ++key)
+        state.keys[static_cast<std::size_t>(key)] = sf::Keyboard::isKeyPressed(static_cast<sf::Keyboard::Key>(key));
+    if (profile.device() == ControlDevice::Mouse) {
+        for (int button = 0; button < sf::Mouse::ButtonCount; ++button)
+            state.mouse[static_cast<std::size_t>(button)] = sf::Mouse::isButtonPressed(static_cast<sf::Mouse::Button>(button));
+        const auto cursor = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+        for (const auto& player : network_.players()) {
+            if (network_.lobby() && player.id == network_.lobby()->yourSlot) {
+                const float dx = cursor.x - (static_cast<float>(player.x) + config::kPlayerSize / 2.f);
+                const float dy = cursor.y - (static_cast<float>(player.y) + config::kPlayerSize / 2.f);
+                state.x = std::abs(dx) > 12.f ? dx : 0;
+                state.y = std::abs(dy) > 12.f ? dy : 0;
+            }
+        }
+    } else if (profile.device() == ControlDevice::Gamepad) {
+        for (unsigned joystick = 0; joystick < sf::Joystick::Count; ++joystick) {
+            if (!sf::Joystick::isConnected(joystick)) continue;
+            for (unsigned button = 0; button < sf::Joystick::getButtonCount(joystick); ++button)
+                state.buttons[button] = sf::Joystick::isButtonPressed(joystick, button);
+            const auto axis = [joystick](sf::Joystick::Axis primary, sf::Joystick::Axis dpad) {
+                float value = sf::Joystick::hasAxis(joystick, primary) ? sf::Joystick::getAxisPosition(joystick, primary) : 0.f;
+                if (std::abs(value) <= 25.f && sf::Joystick::hasAxis(joystick, dpad))
+                    value = sf::Joystick::getAxisPosition(joystick, dpad);
+                return std::abs(value) > 25.f ? value : 0.f;
+            };
+            state.x = axis(sf::Joystick::X, sf::Joystick::PovX);
+            // SFML's vertical D-pad axis is positive upwards, unlike the stick Y axis.
+            const float y = sf::Joystick::hasAxis(joystick, sf::Joystick::Y) ? sf::Joystick::getAxisPosition(joystick, sf::Joystick::Y) : 0.f;
+            state.y = std::abs(y) > 25.f ? y : sf::Joystick::hasAxis(joystick, sf::Joystick::PovY)
+                ? -sf::Joystick::getAxisPosition(joystick, sf::Joystick::PovY) : 0.f;
+            if (std::abs(state.y) <= 25.f) state.y = 0;
+            break;
+        }
     }
-    if (pressed(Key::Down) || pressed(Key::S)) {
-        bits |= bit(InputType::Down);
-    }
-    if (pressed(Key::Left) || pressed(Key::A) || pressed(Key::Q)) {
-        bits |= bit(InputType::Left);
-    }
-    if (pressed(Key::Right) || pressed(Key::D)) {
-        bits |= bit(InputType::Right);
-    }
-    if (pressed(Key::Space)) {
-        bits |= bit(InputType::Shoot);
-    }
-    return bits;
+    return profile.input(state);
 }
 
 void ClientApp::sync_world() {

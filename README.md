@@ -75,8 +75,9 @@ accepts the connection.
 - If the leader leaves, the member present the longest becomes the leader.
 - When the lobby returns to waiting (game over), everyone goes back to its waiting room.
 - A lost connection is retried automatically; the status shows at the bottom of the menus.
-- **Meilleur score** reserves a dedicated panel; `--` is a placeholder, with no
-  score calculation or saving yet.
+- **Meilleur score** shows your personal record for the current name. The waiting
+  room also shows **Ton record**. The record is saved locally whenever the server
+  reports a higher score, including during a game or when leaving before game over.
 
 The menu uses `back_lobby.png` when present, otherwise the supplied
 `back_menu.png`. FreeGUI panels, ribbons, fields, buttons and icons style the
@@ -86,12 +87,24 @@ shown in a smaller size above the main-menu buttons, without stretching it.
 The main menu has no title ribbon. Text is rasterized above its displayed pixel
 size and aligned to window pixels to reduce pixelation when resized.
 
-Settings and the pause menu now include **Controles**, with **Clavier**, **Souris**
-and **Manette** tabs. FreeGUI buttons show six actions and their displayed bindings;
-clicking a binding only highlights its row. Retour or Escape returns to the
-previous settings screen. This is a visual interface: it does not capture new
-keys, change gameplay input, save bindings, or detect connected devices. Mouse
-and gamepad bindings are proposed examples, not active controls.
+Settings and the pause menu include **Controles**, with **Clavier**, **Souris**
+and **Manette** tabs. The selected tab is the active gameplay device. Click an
+action, then press a key, mouse button or gamepad button to change it. Escape
+cancels capture, and F11 remains reserved for fullscreen. Reusing an assigned
+button swaps the two actions. **Par defaut** restores controls without clearing
+scores. Changes apply immediately and survive client restarts.
+
+Keyboard defaults retain arrows, WASD/ZQSD, Space to fire and Escape to pause.
+Mouse mode moves toward the cursor in the play area, with left click to shoot
+and right click to pause. Gamepad mode uses the first connected controller's left
+stick or D-pad (25% dead zone), button 1 to shoot and button 8 to pause; buttons
+can be reassigned. The configured keyboard pause key also works in these modes.
+Close the window or use the menu icon if a controller is disconnected.
+
+Scores are local to this computer and indexed by the exact player name; controls
+are shared by all local names. Both are stored in `n-type/client.json` under
+`$XDG_CONFIG_HOME` (or `~/.config`) on Linux, and `%APPDATA%/N-Type/client.json`
+on Windows. `NTYPE_PROFILE_PATH` overrides the file path, including for tests.
 
 The same native window is reused by the menus and the game. Its size and position
 are retained; **F11** switches fullscreen and restores the previous windowed size
@@ -191,7 +204,7 @@ additional volleys in `attack_patterns.json` (20–22). `Game::drop_item` in
 | [engine/](engine/) | Shared ECS: World, components, Movement and Draw systems |
 | [ClientApp.cpp](client/src/ClientApp.cpp) | The game: mirrors the lobby's snapshots into an engine World and draws it; pause menu |
 | [Launcher.cpp](client/src/Launcher.cpp) | Title, connection, main menu, lobby list, create, waiting room and settings |
-| [ControlsMenu.cpp](client/src/ControlsMenu.cpp) | Shared visual keyboard/mouse/gamepad settings; no input remapping |
+| [ControlsMenu.cpp](client/src/ControlsMenu.cpp) | Persistent keyboard/mouse/gamepad bindings shared with gameplay |
 | [GuiSkin.hpp](client/src/GuiSkin.hpp) | Shared FreeGUI drawing and smooth text helpers |
 | [WindowState.hpp](client/src/WindowState.hpp) | Shared window bounds and fullscreen restoration |
 | [ClientNetwork.cpp](client/src/ClientNetwork.cpp) | The session: connect, lobby list, lobby requests re-sent until confirmed, snapshots |
@@ -293,8 +306,7 @@ Their sprites, planned attacks, damage, delays and stronger boss phases are
 documented in [docs/ENEMIES.md](docs/ENEMIES.md). The server spawns them from
 `levels.json` and the engine runs their stats, flight and attack patterns, contact
 damage and scores. Not implemented yet: the bosses' special attacks and phases
-(Theice's laser, phase speed-ups, Carry's one-shot), attack warnings, and the
-best-score card.
+(Theice's laser, phase speed-ups, Carry's one-shot), attack warnings.
 
 ## Verification
 
@@ -314,14 +326,14 @@ four edges, a full server and crash timeouts. For visual checks:
 1. Start without `-n`: PLAY must be visible immediately, with menu music. The
    connection name must be empty and host/port prefilled.
 2. Check the FreeGUI connection, main menu, lobby list, creation, waiting room and
-   settings; the best-score card must show `--` and the main menu must have no title ribbon.
+   settings; the best-score card must show the saved record and the main menu must have no title ribbon.
 3. Use Play solo. Leave the tooth stationary and check that its wings keep
    flapping. Move to all four edges: the entire play area must remain visible,
    and background speed must stay constant in every direction.
 4. Open pause with Escape or the icon. Check Continuer, the lobby name and code, Lobby,
    music and click-sound controls. Open Controles from both settings and pause; switch
-   tabs, select a row, return with Escape and Retour, and verify that gameplay bindings
-   remain unchanged.
+   tabs, remap an action, return and verify that gameplay uses the new binding.
+   Restart the client and check that the binding and personal best score persist.
 5. Start three clients: create a lobby in one, join it from the list in the second and
    by room code in the third, rename it and start it from the leader. Join a playing
    lobby to check the spectator banner, then type `gameover <code>` in the server:

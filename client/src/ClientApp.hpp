@@ -86,6 +86,7 @@ private:
     sf::Clock frame_clock_;
     double automatic_background_x_ = 0.0;
     bool pause_menu_open_ = false;
+    bool pause_held_ = false;
     bool results_open_ = false; // The lobby's game ended: the results screen is shown.
     bool music_enabled_ = true;
     bool session_active_ = true;

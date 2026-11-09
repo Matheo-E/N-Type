@@ -1,9 +1,11 @@
 # The network session, without any window code: shared by the executable and the tests.
 add_library(ntype_client_core STATIC
     src/ClientNetwork.cpp
+    src/PlayerProfile.cpp
 )
 target_include_directories(ntype_client_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(ntype_client_core PUBLIC ntype_shared ntype_engine)
+target_link_libraries(ntype_client_core PRIVATE nlohmann_json::nlohmann_json)
 
 add_executable(r-type_client
     src/main.cpp
