@@ -8,42 +8,31 @@ lorsque le combat sera intégré.
 
 ## État de l'intégration
 
-Le chargeur actuel lit `id`, `name`, `hp`, `radius`, `color`, `speed`,
-`fire_interval`, `attack_pattern`, `flight_pattern` et `sprite`. Il ignore les
-nouveaux champs de combat. Le serveur réseau ne charge pas encore ce catalogue
-et ne fait pas apparaître ces ennemis.
-
-Les dégâts, attaques, projectiles, mouvements, scores et phases décrits ci-dessous
-sont donc des **données préparées**, pas des comportements déjà jouables.
-`attack_pattern` et `flight_pattern` restent à `-1` : cela évite d'activer les
-anciens tirs vers le bas et déplacements verticaux de la démo, qui ne correspondent
-pas à ce jeu horizontal. Le futur moteur devra lire `movement` et `attacks`.
-Un ennemi créé avec le moteur actuel aura ses PV et son sprite, mais restera
-immobile et ne tirera pas. Les corps à corps n'infligent pas encore leurs dégâts.
-La démo historique `src/main.cpp`, hors compilation actuelle, référence encore
-les anciens IDs 1 et 2 ; il faudra adapter ces appels si elle est remise en service.
+Le serveur charge ce catalogue, les patterns d'attaque et de déplacement, puis
+fait apparaître les ennemis depuis `levels.json`. Les PV, dégâts de contact,
+projectiles, zones annoncées, mouvements, morts et scores sont actifs. Les phases
+de rage et annonces des tirs des boss restent à implémenter.
 
 ## Ennemis par niveau
 
-| Niveau | ID | Nom | PV | Vitesse | Rôle | Contact | Score prévu |
+| Niveau | ID | Nom | PV | Vitesse de base | Rôle | Contact | Score |
 |---|---:|---|---:|---:|---|---:|---:|
-| Glace | 11 | chomper | 10 | 80 | Corps à corps | 1 | 100 |
-| Glace | 12 | smice | 8 | 50 | Flèche de glace | 1 | 150 |
-| Glace | 13 | pigice | 13 | 30 | Onde de zone | 1 | 250 |
-| Glace | 14 | theice | 200 | 0 | Boss : laser et boules | 2 | 2500 |
-| Bonbons | 21 | wrapped | 15 | 80 | Corps à corps | 1 | 150 |
-| Bonbons | 22 | jellybean | 12 | 50 | Petites boules | 1 | 225 |
-| Bonbons | 23 | gummyworm | 20 | 30 | Onde de zone | 1 | 375 |
-| Bonbons | 24 | candybear | 250 | 0 | Boss : poings géants | 2 | 4000 |
-| Dentiste | 31 | psyring | 18 | 80 | Corps à corps | 2 | 225 |
-| Dentiste | 32 | evilmask | 20 | 50 | Projectiles toxiques | 2 | 325 |
-| Dentiste | 33 | denturesk | 30 | 20 | Onde de zone | 2 | 550 |
-| Dentiste | 34 | carry | 500 | 100 | Boss final : tirs mortels | 2 | 10000 |
+| Glace | 1 | chomper | 10 | 80 | Corps à corps | 1 | 100 |
+| Glace | 2 | smice | 8 | 50 | Tireur | 1 | 150 |
+| Glace | 3 | pigice | 13 | 30 | Poseur de zones | 1 | 250 |
+| Glace | 4 | theice | 200 | 0 | Boss | 2 | 2500 |
+| Bonbons | 5 | wrapped | 15 | 80 | Corps à corps | 1 | 150 |
+| Bonbons | 6 | jellybean | 12 | 50 | Tireur | 1 | 225 |
+| Bonbons | 7 | gummyworm | 20 | 30 | Poseur de zones | 1 | 375 |
+| Bonbons | 8 | candybear | 250 | 0 | Boss | 2 | 4000 |
+| Dentiste | 9 | psyring | 18 | 80 | Corps à corps | 2 | 225 |
+| Dentiste | 10 | evilmask | 20 | 50 | Tireur | 2 | 325 |
+| Dentiste | 11 | denturesk | 30 | 20 | Poseur de zones | 2 | 550 |
+| Dentiste | 12 | carry | 500 | 100 | Boss | 2 | 10000 |
 
-Les corps à corps poursuivent le joueur (`chase_player`). Les tireurs et ennemis
-de zone avancent vers la gauche (`advance_left`). La vitesse de poursuite reste
-inférieure à celle du joueur (300), afin de permettre l'esquive. Le score est
-réservé à une future intégration ; il n'alimente pas encore le panneau du menu.
+Les corps à corps poursuivent le joueur. Les tireurs et poseurs avancent vers
+la gauche ; les poseurs s'arrêtent à x=200 pour rester accessibles. Le score
+est attribué au joueur qui tue l'ennemi, et le record personnel est sauvegardé.
 
 ## Attaques normales
 
@@ -53,57 +42,72 @@ réservé à une future intégration ; il n'alimente pas encore le panneau du me
   rayon de collision 8.
 - **Evilmask** : un projectile toxique toutes les 1,1 s ; vitesse 300, dégâts 2,
   rayon de collision 9.
-- **Pigice** : onde circulaire de rayon 110 toutes les 3,2 s ; annonce de 0,8 s,
-  dégâts 1, zone active pendant 0,4 s.
-- **Gummyworm** : même principe, rayon 140 toutes les 2,8 s ; annonce de 0,9 s,
-  dégâts 1.
-- **Denturesk** : rayon 175 toutes les 2,4 s ; annonce de 1 s, dégâts 2.
+- **Pigice** : cercle de rayon 110, dégâts 1, pose toutes les 4 s.
+- **Gummyworm** : cercle de rayon 140, dégâts 1, pose toutes les 5 s.
+- **Denturesk** : cercle de rayon 175, dégâts 2, pose toutes les 6 s.
 
-Les tirs simples ont une annonce de 0,35 s. La cible est choisie au début de
-l'annonce : les projectiles ne deviennent pas des missiles à tête chercheuse.
-Une onde est centrée sur l'ennemi et utilise un anneau dessiné par le moteur
-(`visual: expanding_ring`) ; aucun fichier de sprite supplémentaire n'est requis.
-Un déclenchement ne doit infliger qu'un seul impact par joueur, pas des dégâts
-à chaque image pendant sa durée.
+Les tirs simples visent le joueur au moment du tir et ne sont pas des missiles
+à tête chercheuse. Les zones suivent les règles ci-dessous.
+Les ennemis de zone (Pigice, Gummyworm, Denturesk) posent désormais leurs cercles
+à la **position du joueur ciblé**, puis ces cercles restent fixes. Une annonce
+**orange de 1,5 seconde**, avec un disque de progression, précède l'activation
+**rouge** : sortir pendant ce délai évite les dégâts. Une zone active peut blesser
+chaque joueur au plus une fois toutes les **2 secondes**.
+
+Les poses sont espacées de **4, 5 et 6 secondes** selon l'ennemi. Limites :
+**2 zones par poseur et 3 au total**. Chaque zone reste active **2 secondes**
+après son avertissement, puis disparaît. Tuer le poseur supprime
+immédiatement toutes ses zones, sans supprimer celles des autres poseurs. Les
+poseurs avancent jusqu'à x=200 puis restent accessibles à l'écran. Un changement
+de niveau nettoie aussi les zones restantes.
+
+## Densité des vagues
+
+Les niveaux contiennent **40, 51 et 32 ennemis** avant leur boss. Le dernier
+niveau est allégé : ses vagues sont plus petites et plus espacées, les trois
+petites vagues ajoutées sont retirées, et il conserve trois poseurs de zones.
+Toutes les entrées restent dans la hauteur jouable.
 
 ## Boss
 
+- **Theice** : un renfort toutes les **3 secondes**, maximum **5 ennemis ordinaires vivants**.
+- **Candybear** : un renfort toutes les **5 secondes**, maximum **2 ennemis ordinaires vivants**.
+- **Carry** : **aucun renfort** pendant le combat.
+
+Le serveur compte aussi les survivants des vagues précédentes dans les limites.
+Les renforts cessent dès que le boss meurt et sont nettoyés au changement de niveau.
+Configuration : `boss_support` dans `assets/data/levels.json`.
+
 ### Theice — 200 PV
 
-Il reste au centre droit, en (1100, 360), et alterne strictement :
-
-1. **Laser central** : bande horizontale de x=1280 vers x=0, à y=360 ; épaisseur
-   96, durée 1,8 s, dégâts 2. Annonce de 1,3 s avant activation. Sprite `ice_beam.png`.
-2. **Boules géantes** : 12 projectiles répartis sur 360°, vitesse 170, rayon 24,
-   hauteur visuelle 72, dégâts 1. Annonce de 0,8 s. Sprite `spiked_ice_ball.png`.
-
-Le délai de préparation entre deux attaques est celui de l'attaque suivante :
-8 s avant le laser, 4,5 s avant les boules. Après le délai, l'annonce commence,
-puis l'attaque est déclenchée. Pas de chevauchement entre les attaques de ce boss.
-À 50 % des PV : délais ×0,75 et vitesse des projectiles ×1,10.
-Le laser doit rester esquivable par le haut et le bas.
+Il reste en **(1140, 340)**. Son sprite animé mesure environ **623 × 623 pixels**
+et occupe le côté droit, avec une partie du sprite hors écran (rayon de collision 215).
+Toutes les **3,6 s**, deux points de tir situés à **(-180, -170)** et **(-180, +170)**
+par rapport à son centre émettent chacun un éventail de **8 boules sur 44°** vers
+la gauche. Les tirs partent donc du haut et du bas, sans émission centrale.
+Vitesse 210, rayon 24, dégâts 1. Sprite `spiked_ice_ball.png`.
 
 ### Candybear — 250 PV
 
-Il reste en (1100, 360). Toutes les 3,4 s, il annonce pendant 1,1 s une salve de
-**trois énormes poings**, répartis sur 36° autour de la direction vers le joueur.
-Vitesse 230, rayon 36, hauteur visuelle 112 et dégâts 2. Sprite `candy_boss_fist.png`.
-À 50 % des PV : délai ×0,70 et vitesse des poings ×1,15.
+Il reste en **(1140, 350)**, avec un sprite animé d'environ **615 × 615 pixels**
+(rayon de collision 205). Le bas opaque des trois images de ses pieds se situe
+vers **y=612**, dans la surface du sol de bonbons.
+Toutes les **2,6 s**, il envoie **9 poings sur 100°** en direction du joueur le plus
+proche, depuis **(-180, -40)** par rapport au centre. Vitesse 230, rayon 36,
+dégâts 2. Sprite `candy_boss_fist.png`.
 
 ### Carry — 500 PV
 
-Il reste à x=1100 et patrouille verticalement entre y=140 et y=580 à la vitesse
-100. Le déplacement inverse son sens aux bornes, sans dérive horizontale.
+Son sprite est réduit à environ **130 × 130 pixels** (rayon de collision 36).
+Il reste à **x=1100**, avec des allers-retours sinusoïdaux autour de **y=360**,
+entre environ **y=110 et y=610**. Sa vitesse verticale maximale est **440 pixels/s**,
+avec un cycle d'environ **3,6 s**.
+Toutes les **0,9 s**, il tire **4 projectiles sur 24°** vers la gauche, comme
+le tir quadruple du joueur en sens inverse. Vitesse 420, rayon 9, dégâts 2.
+Sprite `infected_tooth_projectile.png`. Le précédent tir létal unique est remplacé.
 
-Toutes les 2,8 s, une annonce de 1,2 s précède un tir visant le joueur : vitesse
-360, rayon 14, hauteur visuelle 48. Sprite `infected_tooth_projectile.png`.
-Le champ `one_shot: true` impose une élimination en un impact, indépendamment
-des PV restants. `damage: 9999` exprime aussi le caractère létal, mais le futur
-moteur doit implémenter le drapeau explicitement.
-
-À 40 % des PV : délai ×0,65, vitesse ×1,15 et salve de **trois** tirs sur 30°.
-L'annonce reste à 1,2 s : le boss est très dangereux, mais ses tirs restent
-anticipables. Il ne tire pas de laser ni de projectiles invisibles supplémentaires.
+Ces attaques sont actives dans le moteur. Les anciennes annonces, phases de rage
+et le laser de Theice ne font pas partie de cette configuration.
 
 ## Champs préparés pour le moteur
 

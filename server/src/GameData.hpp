@@ -22,6 +22,9 @@ struct Level {
     std::string name;
     std::vector<Wave> waves;
     Wave boss; // count 1; killing it clears the level
+    std::vector<int> support_enemies; // optional repeating reinforcements while the boss lives
+    float support_interval = 7;
+    int support_max_alive = 2;
 };
 
 // Everything a game is built from, loaded once by the server and shared by every lobby.

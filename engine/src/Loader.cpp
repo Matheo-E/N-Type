@@ -111,6 +111,13 @@ AttackPattern ReadAttack(const nlohmann::json& item) {
     pattern.SpreadDegrees = item.value("spread", pattern.SpreadDegrees);
     pattern.AngleDegrees = item.value("angle", pattern.AngleDegrees);
     pattern.Aimed = item.value("aimed", pattern.Aimed);
+    pattern.TargetZone = item.value("target_zone", pattern.TargetZone);
+    pattern.WarningTime = item.value("warning_time", pattern.WarningTime);
+    if (item.contains("origins")) {
+        pattern.Origins.clear();
+        for (const auto& origin : item.at("origins"))
+            pattern.Origins.push_back({origin.at(0).get<float>(), origin.at(1).get<float>()});
+    }
     pattern.Speed = item.value("speed", pattern.Speed);
     pattern.Damage = item.value("damage", pattern.Damage);
     pattern.Radius = item.value("radius", pattern.Radius);
@@ -247,7 +254,20 @@ bool LoadItems(World& world, const std::string& path) {
 
 bool LoadAttackPatterns(World& world, const std::string& path) {
     return ReadList(path, "attack_patterns", [&world](const nlohmann::json& item) {
-        world.AttackPatterns[item.at("id").get<int>()] = ReadAttack(item);
+        AttackPattern pattern = ReadAttack(item);
+        if (pattern.TargetZone && (!std::isfinite(pattern.WarningTime) || pattern.WarningTime <= 0)) {
+            std::cerr << "attack pattern " << item.at("id") << ": warning_time must be positive\n";
+            return false;
+        }
+        if (pattern.TargetZone && (!std::isfinite(pattern.Lifetime) || pattern.Lifetime <= 0)) {
+            std::cerr << "attack pattern " << item.at("id") << ": active lifetime must be positive\n";
+            return false;
+        }
+        if (pattern.Origins.empty()) {
+            std::cerr << "attack pattern " << item.at("id") << ": origins must not be empty\n";
+            return false;
+        }
+        world.AttackPatterns[item.at("id").get<int>()] = std::move(pattern);
         return true;
     });
 }

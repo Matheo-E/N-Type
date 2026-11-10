@@ -1,6 +1,7 @@
 #include "GameData.hpp"
 
 #include <fstream>
+#include <cmath>
 
 #include <nlohmann/json.hpp>
 
@@ -38,6 +39,12 @@ bool load_levels(GameData& data, const std::string& path, std::string& error) {
             }
             level.boss = read_wave(item.at("boss"));
             level.boss.count = 1;
+            if (item.contains("boss_support")) {
+                const auto& support = item.at("boss_support");
+                level.support_enemies = support.at("enemies").get<std::vector<int>>();
+                level.support_interval = support.value("interval", 7.0f);
+                level.support_max_alive = support.value("max_alive", 2);
+            }
             data.levels.push_back(std::move(level));
         }
     } catch (const nlohmann::json::exception& problem) {
@@ -46,6 +53,17 @@ bool load_levels(GameData& data, const std::string& path, std::string& error) {
     }
     // Every enemy a level names must exist.
     for (const Level& level : data.levels) {
+        if (!std::isfinite(level.support_interval) || level.support_interval <= 0 || level.support_max_alive < 1) {
+            error = path + ": invalid boss support interval or limit in " + level.name;
+            return false;
+        }
+        for (int enemy : level.support_enemies) {
+            const auto type = data.definitions.EnemyTypes.find(enemy);
+            if (type == data.definitions.EnemyTypes.end() || type->second.Boss) {
+                error = path + ": boss support must name ordinary enemies in " + level.name;
+                return false;
+            }
+        }
         for (const Wave& wave : level.waves) {
             if (data.definitions.EnemyTypes.count(wave.enemy) == 0) {
                 error = path + ": level " + level.name + " names unknown enemy " + std::to_string(wave.enemy);

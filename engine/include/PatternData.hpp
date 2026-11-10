@@ -24,10 +24,13 @@ public:
     float SpreadDegrees = 0;
     float AngleDegrees = 0;
     bool Aimed = false;
+    bool TargetZone = false; // stationary hazard placed at the nearest player's current position
+    float WarningTime = 2.5f;
+    std::vector<sf::Vector2f> Origins = {{0, 0}}; // emission points relative to the shooter
     float Speed = 200;     // pixels per second
     int Damage = 1;
     float Radius = 4;      // hitbox radius
-    float Lifetime = 10;   // seconds
+    float Lifetime = 10;   // seconds; target zones: active duration after WarningTime
     int TextureId = -1;    // id in textures.json; -1: the bullet is not drawn
     sf::IntRect Source;    // the cell of the image to show
     float Scale = 1;

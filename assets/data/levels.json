@@ -4,53 +4,74 @@
       "id": 1,
       "name": "ice",
       "waves": [
-        { "time": 2,  "enemy": 2, "count": 3, "interval": 1.2, "y": 180, "y_step": 180 },
-        { "time": 8,  "enemy": 1, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
+        { "time": 2, "enemy": 2, "count": 5, "interval": 0.96, "y": 100, "y_step": 130.0 },
+        { "time": 5, "enemy": 1, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
+        { "time": 8, "enemy": 1, "count": 3, "interval": 1.2, "y": 100, "y_step": 260.0 },
         { "time": 14, "enemy": 3, "count": 1, "y": 360 },
-        { "time": 20, "enemy": 2, "count": 4, "interval": 0.8, "y": 120, "y_step": 160 },
-        { "time": 27, "enemy": 1, "count": 3, "interval": 1.0, "y": 150, "y_step": 210 },
+        { "time": 17, "enemy": 2, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
+        { "time": 20, "enemy": 2, "count": 6, "interval": 0.64, "y": 100, "y_step": 104.0 },
+        { "time": 27, "enemy": 1, "count": 5, "interval": 0.8, "y": 100, "y_step": 130.0 },
         { "time": 34, "enemy": 3, "count": 2, "interval": 2.0, "y": 200, "y_step": 320 },
-        { "time": 40, "enemy": 2, "count": 3, "interval": 0.6, "y": 240, "y_step": 120 },
-        { "time": 44, "enemy": 1, "count": 2, "interval": 0.8, "y": 120, "y_step": 480 },
+        { "time": 40, "enemy": 2, "count": 5, "interval": 0.48, "y": 100, "y_step": 130.0 },
+        { "time": 44, "enemy": 1, "count": 3, "interval": 0.64, "y": 100, "y_step": 260.0 },
+        { "time": 47, "enemy": 1, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
         { "time": 50, "enemy": 3, "count": 1, "y": 360 },
-        { "time": 52, "enemy": 2, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 }
+        { "time": 52, "enemy": 2, "count": 3, "interval": 0.8, "y": 100, "y_step": 260.0 }
       ],
-      "boss": { "time": 60, "enemy": 4, "x": 1100, "y": 360 }
+      "boss": { "time": 60, "enemy": 4, "x": 1140, "y": 340 },
+      "boss_support": {
+        "enemies": [1, 2],
+        "interval": 3,
+        "max_alive": 5
+      }
     },
     {
       "id": 2,
       "name": "candy",
       "waves": [
-        { "time": 2,  "enemy": 6, "count": 3, "interval": 1.0, "y": 160, "y_step": 200 },
-        { "time": 7,  "enemy": 5, "count": 3, "interval": 1.2, "y": 140, "y_step": 220 },
+        { "time": 2, "enemy": 6, "count": 5, "interval": 0.8, "y": 100, "y_step": 130.0 },
+        { "time": 4.5, "enemy": 5, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
+        { "time": 7, "enemy": 5, "count": 5, "interval": 0.96, "y": 100, "y_step": 130.0 },
         { "time": 13, "enemy": 7, "count": 1, "y": 360 },
-        { "time": 18, "enemy": 6, "count": 5, "interval": 0.7, "y": 100, "y_step": 130 },
-        { "time": 25, "enemy": 5, "count": 4, "interval": 0.8, "y": 120, "y_step": 160 },
+        { "time": 15.5, "enemy": 6, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
+        { "time": 18, "enemy": 6, "count": 8, "interval": 0.56, "y": 100, "y_step": 74.29 },
+        { "time": 25, "enemy": 5, "count": 6, "interval": 0.64, "y": 100, "y_step": 104.0 },
         { "time": 31, "enemy": 7, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
-        { "time": 37, "enemy": 6, "count": 4, "interval": 0.6, "y": 180, "y_step": 120 },
-        { "time": 42, "enemy": 5, "count": 3, "interval": 0.6, "y": 120, "y_step": 240 },
+        { "time": 37, "enemy": 6, "count": 6, "interval": 0.48, "y": 100, "y_step": 104.0 },
+        { "time": 42, "enemy": 5, "count": 5, "interval": 0.48, "y": 100, "y_step": 130.0 },
+        { "time": 45, "enemy": 5, "count": 2, "interval": 0.7, "y": 220, "y_step": 280 },
         { "time": 48, "enemy": 7, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 },
-        { "time": 54, "enemy": 6, "count": 3, "interval": 0.8, "y": 200, "y_step": 160 }
+        { "time": 54, "enemy": 6, "count": 5, "interval": 0.64, "y": 100, "y_step": 130.0 }
       ],
-      "boss": { "time": 65, "enemy": 8, "x": 1100, "y": 360 }
+      "boss": { "time": 65, "enemy": 8, "x": 1140, "y": 350 },
+      "boss_support": {
+        "enemies": [5, 6],
+        "interval": 5,
+        "max_alive": 2
+      }
     },
     {
       "id": 3,
       "name": "dentist_lab",
       "waves": [
-        { "time": 2,  "enemy": 10, "count": 3, "interval": 1.0, "y": 180, "y_step": 180 },
-        { "time": 7,  "enemy": 9,  "count": 3, "interval": 1.0, "y": 140, "y_step": 220 },
+        { "time": 2, "enemy": 10, "count": 3, "interval": 1.0, "y": 100, "y_step": 260.0 },
+        { "time": 7, "enemy": 9, "count": 3, "interval": 1.0, "y": 100, "y_step": 260.0 },
         { "time": 13, "enemy": 11, "count": 1, "y": 360 },
-        { "time": 18, "enemy": 10, "count": 5, "interval": 0.6, "y": 100, "y_step": 130 },
-        { "time": 24, "enemy": 9,  "count": 4, "interval": 0.7, "y": 120, "y_step": 160 },
-        { "time": 30, "enemy": 11, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
-        { "time": 36, "enemy": 10, "count": 4, "interval": 0.5, "y": 160, "y_step": 130 },
-        { "time": 41, "enemy": 9,  "count": 4, "interval": 0.5, "y": 120, "y_step": 160 },
-        { "time": 47, "enemy": 11, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 },
-        { "time": 52, "enemy": 10, "count": 3, "interval": 0.6, "y": 200, "y_step": 160 },
-        { "time": 58, "enemy": 9,  "count": 3, "interval": 0.6, "y": 160, "y_step": 200 }
+        { "time": 18, "enemy": 10, "count": 5, "interval": 1.0, "y": 100, "y_step": 130.0 },
+        { "time": 24, "enemy": 9, "count": 4, "interval": 1.0, "y": 100, "y_step": 173.33 },
+        { "time": 30, "enemy": 11, "count": 1, "y": 360 },
+        { "time": 36, "enemy": 10, "count": 5, "interval": 0.9, "y": 100, "y_step": 130.0 },
+        { "time": 41, "enemy": 9, "count": 3, "interval": 0.9, "y": 100, "y_step": 260.0 },
+        { "time": 47, "enemy": 11, "count": 1, "y": 360 },
+        { "time": 52, "enemy": 10, "count": 3, "interval": 0.9, "y": 100, "y_step": 260.0 },
+        { "time": 58, "enemy": 9, "count": 3, "interval": 0.9, "y": 100, "y_step": 260.0 }
       ],
-      "boss": { "time": 70, "enemy": 12, "x": 1100, "y": 360 }
+      "boss": { "time": 70, "enemy": 12, "x": 1100, "y": 360 },
+      "boss_support": {
+        "enemies": [],
+        "interval": 3,
+        "max_alive": 5
+      }
     }
   ]
 }

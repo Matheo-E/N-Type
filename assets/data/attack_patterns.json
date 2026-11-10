@@ -27,24 +27,31 @@
     },
     {
       "id": 2,
+      "target_zone": true,
+      "warning_time": 1.5,
       "name": "pigice_area_pulse",
       "count": 1,
       "spread": 0,
       "speed": 0,
       "damage": 1,
       "radius": 110,
-      "lifetime": 0.4
+      "lifetime": 2.0
     },
     {
       "id": 3,
-      "name": "theice_radial_burst",
-      "count": 12,
-      "spread": 360,
-      "speed": 170,
+      "name": "theice_upper_lower_fans",
+      "count": 8,
+      "spread": 44,
+      "speed": 210,
       "damage": 1,
       "radius": 24,
       "lifetime": 8.0,
-      "sprite": { "texture": 7, "rect": [0,  0,  1312,  1199], "scale": 0.06005, "flip_x": true }
+      "sprite": {"texture": 7, "rect": [0, 0, 1312, 1199], "scale": 0.06005, "flip_x": true},
+      "angle": -90,
+      "origins": [
+        [-180, -170],
+        [-180, 170]
+      ]
     },
     {
       "id": 4,
@@ -60,25 +67,30 @@
     },
     {
       "id": 5,
+      "target_zone": true,
+      "warning_time": 1.5,
       "name": "gummyworm_area_pulse",
       "count": 1,
       "spread": 0,
       "speed": 0,
       "damage": 1,
       "radius": 140,
-      "lifetime": 0.4
+      "lifetime": 2.0
     },
     {
       "id": 6,
       "name": "candybear_aimed_fan",
-      "count": 3,
-      "spread": 36,
+      "count": 9,
+      "spread": 100,
       "aimed": true,
       "speed": 230,
       "damage": 2,
       "radius": 36,
       "lifetime": 8.0,
-      "sprite": { "texture": 13, "rect": [0,  0,  1672,  941], "scale": 0.119022, "flip_x": true }
+      "sprite": {"texture": 13, "rect": [0, 0, 1672, 941], "scale": 0.119022, "flip_x": true},
+      "origins": [
+        [-180, -40]
+      ]
     },
     {
       "id": 7,
@@ -94,25 +106,28 @@
     },
     {
       "id": 8,
+      "target_zone": true,
+      "warning_time": 1.5,
       "name": "denturesk_area_pulse",
       "count": 1,
       "spread": 0,
       "speed": 0,
       "damage": 2,
       "radius": 175,
-      "lifetime": 0.4
+      "lifetime": 2.0
     },
     {
       "id": 9,
-      "name": "carry_aimed_fan",
-      "count": 1,
-      "spread": 0,
-      "aimed": true,
-      "speed": 360,
-      "damage": 9999,
-      "radius": 14,
+      "name": "carry_quadruple_shot",
+      "count": 4,
+      "spread": 24,
+      "aimed": false,
+      "speed": 420,
+      "damage": 2,
+      "radius": 9,
       "lifetime": 8.0,
-      "sprite": { "texture": 19, "rect": [0,  0,  724,  724], "scale": 0.066298, "flip_x": true }
+      "sprite": {"texture": 19, "rect": [0, 0, 724, 724], "scale": 0.066298, "flip_x": true},
+      "angle": -90
     },
     {
       "id": 20,

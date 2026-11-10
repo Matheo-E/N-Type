@@ -38,7 +38,7 @@ struct Entity {
     int32_t x = 0;
     int32_t y = 0;
     uint8_t type = 0;  // enemy/shot/item type; player: 0 normal, kGoldenPlayer shield
-    uint8_t hp = 0;    // health in percent of the maximum (players and enemies), else 0
+    uint8_t hp = 0;    // health percent; target zones: charge 0..99, active 100; otherwise 0
     uint8_t hits = 0;  // counts every hit it took, wrapping at 256: a change means "just hit"
 };
 

@@ -58,6 +58,7 @@ public:
     std::unordered_map<int, EPlayer> Players;
     std::unordered_map<int, EEnemy> Enemies;
     std::unordered_map<int, EBullet> Bullets;
+    std::unordered_map<int, EZone> Zones;
     std::unordered_map<int, EPickup> Pickups;
 
     // Combat
@@ -77,6 +78,8 @@ public:
 
     // Removes the entity from every map. Add a line here for each new map.
     void Destroy(int id) {
+        std::vector<int> owned_zones;
+        for (const auto& [zone, data] : Zones) if (data.Owner == id) owned_zones.push_back(zone);
         Positions.erase(id);
         Velocities.erase(id);
         Speeds.erase(id);
@@ -101,6 +104,7 @@ public:
         Players.erase(id);
         Enemies.erase(id);
         Bullets.erase(id);
+        Zones.erase(id);
         Pickups.erase(id);
 
         Healths.erase(id);
@@ -115,5 +119,6 @@ public:
         Inventories.erase(id);
         Dialogues.erase(id);
         Triggers.erase(id);
+        for (int zone : owned_zones) Destroy(zone);
     }
 };

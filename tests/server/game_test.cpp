@@ -207,6 +207,80 @@ void ships()
 
 }
 
+void boss_reinforcements()
+{
+    GameData data = definitions_only();
+    ntype::server::Level level;
+    level.boss = {0, 4, 1, 1, 1000, 340, 0};
+    level.support_enemies = {1, 2};
+    level.support_interval = 7;
+    level.support_max_alive = 2;
+    data.levels = {level, level};
+    // Keep reinforcements alive and on screen so the cap can be tested reliably.
+    data.definitions.EnemyTypes[1].Speed = 0;
+    data.definitions.EnemyTypes[2].Speed = 0;
+    Game game(data);
+    game.step(0);
+    assert(game.world().Enemies.size() == 1);
+    game.step(6);
+    game.step(0);
+    assert(game.world().Enemies.size() == 1);
+    game.step(1);
+    game.step(0);
+    assert(game.world().Enemies.size() == 2);
+    game.step(7);
+    game.step(0);
+    assert(game.world().Enemies.size() == 3);
+    game.step(21);
+    game.step(0);
+    assert(game.world().Enemies.size() == 3); // cap, even after missed spawn times
+    int reinforcement = -1;
+    for (const auto& [id, enemy] : game.world().Enemies) if (enemy.TypeId == 1) reinforcement = id;
+    assert(reinforcement >= 0);
+    game.world().Destroy(reinforcement);
+    game.step(7);
+    game.step(0);
+    assert(game.world().Enemies.size() == 3); // replenishes the vacancy
+    int boss = -1;
+    for (const auto& [id, enemy] : game.world().Enemies) if (enemy.TypeId == 4) boss = id;
+    game.world().Destroy(boss);
+    game.step(14);
+    game.step(0);
+    assert(game.world().Enemies.size() == 2); // no reinforcements without a living boss
+    assert(game.next_level());
+    game.step(0);
+    assert(game.world().Enemies.size() == 1); // clean level; no immediate reinforcement
+}
+
+void zone_snapshots()
+{
+    const GameData data = definitions_only();
+    Game game(data);
+    game.add_ship(1);
+    const int caster = CreateEEnemy(game.world(), {900, 360}, 3);
+    game.world().Spawners[caster].Timer = game.world().Spawners[caster].Interval;
+    game.step(0);
+    const auto charge = [&]() {
+        for (const auto& entity : game.snapshot())
+            if (entity.kind == static_cast<std::uint8_t>(protocol::EntityKind::EnemyShot) && entity.type == 2)
+                return static_cast<int>(entity.hp);
+        return -1;
+    };
+    assert(charge() == 0);
+    game.world().Positions[ship_entity(game)].Xy = {100, 650};
+    Timers(game.world(), 0.75f);
+    assert(charge() == 50);
+    Timers(game.world(), 0.75f);
+    assert(charge() == 100);
+    Timers(game.world(), 2.1f);
+    assert(charge() == -1); // expiry also reaches clients without killing the caster
+    game.world().Spawners[caster].Timer = game.world().Spawners[caster].Interval;
+    game.step(0);
+    assert(charge() == 0);
+    game.world().Destroy(caster);
+    assert(charge() == -1); // removal reaches every client in the next snapshot
+}
+
 } // namespace
 
 int main()
@@ -218,5 +292,7 @@ int main()
     player_dies();
     enemy_drops();
     boss_clears_level();
+    boss_reinforcements();
+    zone_snapshots();
     std::cout << "Game tests passed!\n";
 }

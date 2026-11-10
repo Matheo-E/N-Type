@@ -127,6 +127,21 @@ void Game::spawn_waves() {
     if (!boss_spawned_ && level_time_ >= level.boss.time) {
         boss_ = CreateEEnemy(world_, {level.boss.x, level.boss.y}, level.boss.enemy);
         boss_spawned_ = true;
+        next_support_time_ = level_time_ + level.support_interval;
+    }
+    if (boss_ >= 0 && world_.Enemies.contains(boss_) && !level.support_enemies.empty() &&
+        level_time_ >= next_support_time_) {
+        next_support_time_ = level_time_ + level.support_interval;
+        int ordinary = 0;
+        for (const auto& [id, enemy] : world_.Enemies) {
+            if (id != boss_ && !world_.EnemyTypes.at(enemy.TypeId).Boss) ++ordinary;
+        }
+        if (ordinary < level.support_max_alive) {
+            const int type = level.support_enemies[support_spawned_ % level.support_enemies.size()];
+            const float y = support_spawned_ % 2 == 0 ? 150.0f : 570.0f;
+            CreateEEnemy(world_, {1320.0f, y}, type);
+            ++support_spawned_;
+        }
     }
 }
 
@@ -202,6 +217,8 @@ bool Game::next_level() {
     spawned_.assign(data_.levels[level_].waves.size(), 0);
     boss_spawned_ = false;
     boss_ = -1;
+    next_support_time_ = 0;
+    support_spawned_ = 0;
     // A new level starts clean: what is left of the previous one goes.
     std::vector<int> leftovers;
     for (const auto& [id, enemy] : world_.Enemies) leftovers.push_back(id);
@@ -243,6 +260,10 @@ std::optional<protocol::Entity> Game::describe(const int entity) const {
         const bool ours = layer != world_.Layers.end() && layer->second.Layer == LayerPlayerBullet;
         out.kind = static_cast<std::uint8_t>(ours ? EntityKind::PlayerShot : EntityKind::EnemyShot);
         out.type = small(bullet->second.PatternId);
+        if (const auto zone = world_.Zones.find(entity); zone != world_.Zones.end()) {
+            const float progress = 1.0f - zone->second.Warning / zone->second.InitialWarning;
+            out.hp = zone->second.Warning > 0 ? static_cast<std::uint8_t>(std::clamp(progress * 100.0f, 0.0f, 99.0f)) : 100;
+        }
     } else if (const auto pickup = world_.Pickups.find(entity); pickup != world_.Pickups.end()) {
         out.kind = static_cast<std::uint8_t>(EntityKind::Item);
         out.type = small(pickup->second.ItemId);

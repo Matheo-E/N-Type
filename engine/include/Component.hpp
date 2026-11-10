@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_map>
 
 // Components are data only. Behaviour lives in the systems.
 // An empty class is a "tag": an entity either has it or does not.
@@ -175,6 +176,15 @@ public:
 class EBullet {
 public:
     int PatternId = -1;
+};
+
+// A temporary hazard. Its owner must stay alive; warning time is harmless.
+class EZone {
+public:
+    int Owner = -1;
+    float Warning = 2.5f;
+    float InitialWarning = 2.5f;
+    std::unordered_map<int, float> HitCooldowns;
 };
 
 // Something that died in Collision. The entity is already destroyed when the game reads

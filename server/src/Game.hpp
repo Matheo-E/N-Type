@@ -80,6 +80,8 @@ private:
     std::vector<int> spawned_; // per wave of the level: how many entered so far
     bool boss_spawned_ = false;
     int boss_ = -1;
+    float next_support_time_ = 0;
+    std::size_t support_spawned_ = 0;
     std::mt19937 drop_random_{std::random_device{}()};
     std::vector<GameEvent> events_;
 };

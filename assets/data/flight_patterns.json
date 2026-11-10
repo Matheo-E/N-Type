@@ -19,8 +19,8 @@
       "type": "sine",
       "direction": -90,
       "forward": 0,
-      "amplitude": 100,
-      "frequency": 0.07234
+      "amplitude": 440,
+      "frequency": 0.28
     }
   ]
 }

@@ -302,11 +302,26 @@ the entire viewport and are stopped at all four edges. Invalid packets are ignor
 
 `assets/data/enemies.json` defines twelve enemies across the three levels,
 including bosses Theice (200 HP), Candybear (250 HP) and Carry (500 HP).
-Their sprites, planned attacks, damage, delays and stronger boss phases are
+Their current sizes, attacks, movement and limited boss reinforcements are
 documented in [docs/ENEMIES.md](docs/ENEMIES.md). The server spawns them from
 `levels.json` and the engine runs their stats, flight and attack patterns, contact
-damage and scores. Not implemented yet: the bosses' special attacks and phases
-(Theice's laser, phase speed-ups, Carry's one-shot), attack warnings.
+damage and scores. The first two levels contain denser waves (40 and 51 enemies before the boss).
+The final level has 32 enemies with more space between arrivals, including only
+three zone casters. During Theice, reinforcements arrive every three seconds,
+up to five ordinary enemies alive. During Candybear, they arrive every five
+seconds, up to two ordinary enemies alive. Carry receives no reinforcements.
+Theice fires upper/lower ball fans;
+Candybear fires nine fists per volley; Carry is a small, fast vertical patrol with
+quadruple shots every 0.9 seconds. Theice and Candybear stand partially offscreen
+on the right; their firing intervals are 3.6 and 2.6 seconds.
+
+Area enemies place temporary zones at a player's current position every 4–6
+seconds. Orange circles warn for 1.5 seconds, then turn red for 2 seconds and
+disappear naturally. Move out before activation, or kill the caster to remove
+its zones immediately. Each caster
+can maintain at most two zones, with three zones maximum across the arena.
+An active zone can hurt each player once every two seconds. Boss attack telegraphs
+and enrage phases are not implemented.
 
 ## Verification
 

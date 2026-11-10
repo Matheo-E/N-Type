@@ -1,5 +1,6 @@
 // Engine behaviour with several players, on the real data in assets/data.
 #include <cassert>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -212,6 +213,115 @@ void burst_fire()
     assert(bullets_of(world, player) == before + 1);
 }
 
+void boss_attacks()
+{
+    World world = loaded();
+    CreateEPlayer(world, {100, 360});
+    const int ice = CreateEEnemy(world, {1000, 340}, 4);
+    world.Spawners[ice].Timer = world.Spawners[ice].Interval;
+    Spawner(world, 0);
+    assert(bullets_of(world, ice) == 16);
+    int upper = 0, lower = 0;
+    for (const auto& [id, owner] : world.OwnerIds) {
+        if (owner.OId != ice) continue;
+        const auto position = world.Positions[id].Xy;
+        assert(close(position.x, 820) && world.Velocities[id].Xy.x < 0);
+        upper += close(position.y, 170);
+        lower += close(position.y, 510);
+    }
+    assert(upper == 8 && lower == 8);
+    Spawner(world, 1.8f);
+    assert(bullets_of(world, ice) == 16); // previous cadence no longer fires a second volley
+    const int bear = CreateEEnemy(world, {1000, 350}, 8);
+    world.Spawners[bear].Timer = world.Spawners[bear].Interval;
+    Spawner(world, 0);
+    assert(bullets_of(world, bear) == 9);
+    Spawner(world, 1.4f);
+    assert(bullets_of(world, bear) == 9);
+
+    const int carry = CreateEEnemy(world, {1100, 360}, 12);
+    world.Spawners[carry].Timer = world.Spawners[carry].Interval;
+    Spawner(world, 0);
+    assert(bullets_of(world, carry) == 4);
+    Spawner(world, 0.45f);
+    assert(bullets_of(world, carry) == 4);
+    for (const auto& [id, owner] : world.OwnerIds) {
+        if (owner.OId == carry) assert(world.Velocities[id].Xy.x < 0 && world.Damages[id].Dmg == 2);
+    }
+    float low = 720, high = 0;
+    for (int tick = 0; tick < 240; ++tick) {
+        Flight(world, 1.f / 60);
+        Movement(world, 1.f / 60);
+        const auto position = world.Positions[carry].Xy;
+        assert(close(position.x, 1100) && position.y > 90 && position.y < 630);
+        low = std::min(low, position.y); high = std::max(high, position.y);
+    }
+    assert(low < 125 && high > 595); // crosses almost the whole height in under four seconds
+}
+
+void targeted_zones()
+{
+    World world = loaded();
+    const int player = CreateEPlayer(world, {100, 360});
+    const int escaped = CreateEPlayer(world, {100, 360});
+    const int stayed = CreateEPlayer(world, {100, 360});
+    const int caster = CreateEEnemy(world, {900, 360}, 3);
+    world.Spawners[caster].Timer = world.Spawners[caster].Interval;
+    Spawner(world, 0);
+    assert(world.Zones.size() == 1);
+    const int zone = world.Zones.begin()->first;
+    assert(world.Positions[zone].Xy == sf::Vector2f(100, 360));
+    assert(close(world.Lifetimes[zone].Lifetime, 3.5f));
+    Collision(world);
+    assert(world.Healths[player].Hp == 3); // warning is harmless
+    world.Positions[escaped].Xy = {400, 100};
+    Timers(world, 1.4f);
+    Collision(world);
+    assert(world.Healths[player].Hp == 3);
+    Timers(world, 0.2f);
+    Collision(world);
+    assert(world.Healths[player].Hp == 2 && world.Healths[escaped].Hp == 3);
+    assert(world.Healths[stayed].Hp == 2); // a zone can hit multiple players
+    assert(world.Zones.count(zone) == 1); // the hit does not consume the zone
+    Timers(world, 1.1f);
+    Collision(world);
+    assert(world.Healths[player].Hp == 2); // two-second cooldown per player
+    world.Positions[player].Xy = {400, 100};
+    Timers(world, 0.9f);
+    assert(world.Zones.count(zone) == 0); // 1.5 s warning + 2 s active, then gone
+
+    // New casts arrive sooner, while simultaneous zones remain bounded.
+    world.Spawners[caster].Timer = 0;
+    Spawner(world, 3.9f);
+    assert(world.Zones.empty());
+    Spawner(world, 0.1f);
+    assert(world.Zones.size() == 1);
+    Spawner(world, 4);
+    assert(world.Zones.size() == 2);
+    Spawner(world, 4);
+    assert(world.Zones.size() == 2); // two per owner
+    const int second = CreateEEnemy(world, {950, 500}, 7);
+    world.Spawners[second].Timer = world.Spawners[second].Interval;
+    Spawner(world, 0);
+    assert(world.Zones.size() == 3);
+    Spawner(world, 6);
+    assert(world.Zones.size() == 3); // three total
+
+    // Leaving the viewport cannot remove a caster's zones; it stays inside at x=200.
+    Flight(world, 100);
+    Movement(world, 100);
+    Cull(world);
+    assert(close(world.Positions[caster].Xy.x, 200) && world.Zones.size() == 3);
+    const int bullet = CreateEBullet(world, player);
+    world.Positions[bullet].Xy = world.Positions[caster].Xy;
+    world.Damages[bullet].Dmg = 100;
+    Collision(world);
+    assert(world.Enemies.count(caster) == 0 && world.Zones.size() == 1);
+    assert(world.Zones.begin()->second.Owner == second); // other caster's zone stays
+    world.Destroy(second);
+    assert(world.Zones.empty());
+}
+
 } // namespace
 
 int main()
@@ -222,5 +332,7 @@ int main()
     hits_counted();
     items();
     burst_fire();
+    boss_attacks();
+    targeted_zones();
     std::cout << "Engine tests passed!\n";
 }

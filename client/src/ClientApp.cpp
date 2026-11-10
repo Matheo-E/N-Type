@@ -519,13 +519,23 @@ void ClientApp::draw_area_attacks() {
         const auto pattern = world_.AttackPatterns.find(entity.type);
         if (pattern == world_.AttackPatterns.end() || pattern->second.TextureId >= 0) continue;
         const float radius = pattern->second.Radius;
+        const bool warning = pattern->second.TargetZone && entity.hp < 100;
+        const sf::Color colour = warning ? sf::Color(255, 195, 50) : sf::Color(255, 70, 70);
         sf::CircleShape ring(radius, 48);
         ring.setOrigin(radius, radius);
         ring.setPosition(static_cast<float>(entity.x), static_cast<float>(entity.y));
-        ring.setFillColor(sf::Color(255, 90, 90, 55));
-        ring.setOutlineColor(sf::Color(255, 70, 70, 190));
+        ring.setFillColor(sf::Color(colour.r, colour.g, colour.b, warning ? 25 : 65));
+        ring.setOutlineColor(sf::Color(colour.r, colour.g, colour.b, 220));
         ring.setOutlineThickness(-4.f);
         window_.draw(ring);
+        if (warning) {
+            const float progress = static_cast<float>(entity.hp) / 100.f;
+            sf::CircleShape timer(radius * progress, 48);
+            timer.setOrigin(radius * progress, radius * progress);
+            timer.setPosition(ring.getPosition());
+            timer.setFillColor(sf::Color(255, 195, 50, 70));
+            window_.draw(timer);
+        }
     }
 }
 
