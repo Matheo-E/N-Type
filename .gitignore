@@ -1,6 +1,7 @@
 # Generated files and dependencies
 /build/
 /out/
+/docs/api/
 /vcpkg/
 /vcpkg_installed/
 /vcpkg-cache/

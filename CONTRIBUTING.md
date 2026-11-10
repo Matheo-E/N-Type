@@ -46,6 +46,18 @@ python3 tests/network_smoke.py ./r-type_server
 For UI/audio work, manually test several window sizes, Escape, F11, leave/rejoin,
 spectator mode, and both victory and defeat.
 
+## Generate the API reference
+
+The repository includes a `Doxyfile`. Once Doxygen and Graphviz are installed:
+
+```sh
+doxygen Doxyfile
+```
+
+Open `docs/api/html/index.html` in a browser. Generated files are ignored by Git.
+See [Generate the API Documentation](docs/DOXYGEN.md) for complete Linux and
+Windows installation, generation, viewing, cleanup, and troubleshooting commands.
+
 ## Protocol changes
 
 There is no version negotiation, so incompatible changes must be atomic:

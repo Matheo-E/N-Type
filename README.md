@@ -102,6 +102,7 @@ hosting, settings, and troubleshooting.
 | [Architecture](docs/ARCHITECTURE.md) | Runtime design, ECS, client/server flow, repository map |
 | [Content Guide](docs/CONTENT_GUIDE.md) | Add enemies, items, attacks, levels, and assets |
 | [Protocol v2](docs/PROTOCOL_v2.md) | UDP wire format, messages, reliability, validation |
+| [API Documentation](docs/DOXYGEN.md) | Generate and view Doxygen on Linux or Windows |
 | [Contributing](CONTRIBUTING.md) | Workflow, tests, conventions, pull requests |
 | [Enemy Catalogue](docs/ENEMIES.md) | Current enemies and bosses |
 | [Draw Layers](docs/DRAW_LAYERS.md) | Rendering order and z-index conventions |
