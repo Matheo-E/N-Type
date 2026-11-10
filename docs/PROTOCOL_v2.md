@@ -180,23 +180,20 @@ if (packet && packet->type == protocol::MessageType::Input) {
 
 The decoder rejects unknown message types, wrong lengths, invalid input bits, invalid player IDs where checked, invalid entity kinds, snapshot parts with more than 90 entities or an invalid part index, health above 100, empty, too long or non-printable strings, invalid room codes, lists of more than 32 lobbies and lobby states with 0 or more than 4 members. The string, code and lobby builders throw `std::invalid_argument` on invalid values; the other builders do **not** check their arguments, so callers must use valid values.
 
-**Not handled by this protocol module:** UDP socket management, retransmission of lost messages, ordering of delayed messages, authentication, and recovery from a lost spawn/destroy event. These are integration concerns for the network/gameplay team. UDP does not guarantee delivery or order; sending snapshots periodically can help refresh positions, but does not replace a complete reliability strategy.
+**Not handled by this protocol module:** UDP socket management, authentication,
+encryption, generic acknowledgements, or ordering of delayed messages. The client
+network layer retries connection and lobby operations; gameplay recovery relies on
+complete snapshots sent every server tick. One-off `EntityDied` effects remain
+best-effort. UDP does not guarantee delivery or order.
 
 ## 7. Test the protocol
 
-From the project root, with the paths shown above:
+Build the project, then run the protocol test through CTest:
 
-```bash
-g++ -std=c++17 -Wall -Wextra -Werror -I. \
-  common/protocol/Protocol.cpp tests/protocol_test.cpp \
-  -o protocol_test
-./protocol_test
+```sh
+ctest --test-dir build/client-linux-release -R protocol_test --output-on-failure
 ```
 
-Expected output:
-
-```text
-All 22 protocol messages passed!
-```
-
-**Before integration:** agree on message directions, event/state meanings, entity IDs, and when the server sends `EntityUpdate` versus `WorldSnapshot`.
+Use `client-linux-debug` after a Debug build. Any wire change must update both
+peers, byte-exact tests, and this document together; there is no protocol-version
+negotiation.
