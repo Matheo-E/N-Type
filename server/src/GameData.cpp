@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <cmath>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -78,6 +79,103 @@ bool load_levels(GameData& data, const std::string& path, std::string& error) {
     return true;
 }
 
+// "origins" in attack_patterns.json: the points a volley is fired from (a game key).
+bool load_origins(GameData& data, const std::string& path, std::string& error) {
+    std::ifstream file(path);
+    if (!file) {
+        error = "cannot open " + path;
+        return false;
+    }
+    try {
+        const nlohmann::json root = nlohmann::json::parse(file);
+        for (const auto& item : root.at("attack_patterns")) {
+            if (!item.contains("origins")) {
+                continue;
+            }
+            std::vector<sf::Vector2f> points;
+            for (const auto& origin : item.at("origins")) {
+                points.push_back({origin.at(0).get<float>(), origin.at(1).get<float>()});
+            }
+            const int id = item.at("id").get<int>();
+            if (points.empty()) {
+                error = path + ": attack pattern " + std::to_string(id) + ": origins must not be empty";
+                return false;
+            }
+            data.origins[id] = std::move(points);
+        }
+    } catch (const nlohmann::json::exception& problem) {
+        error = path + ": " + problem.what();
+        return false;
+    }
+    return true;
+}
+
+// "beam_pattern" in enemies.json: which enemy types cast which beam (a game key).
+bool load_beam_casters(GameData& data, const std::string& path, std::string& error) {
+    std::ifstream file(path);
+    if (!file) {
+        error = "cannot open " + path;
+        return false;
+    }
+    try {
+        const nlohmann::json root = nlohmann::json::parse(file);
+        for (const auto& item : root.at("enemies")) {
+            if (!item.contains("beam_pattern")) {
+                continue;
+            }
+            const int enemy = item.at("id").get<int>();
+            const int beam = item.at("beam_pattern").get<int>();
+            if (!data.beams.contains(beam)) {
+                error = path + ": enemy " + std::to_string(enemy) + " names " + std::to_string(beam) + ", which is not a beam";
+                return false;
+            }
+            data.beam_casters[enemy] = beam;
+        }
+    } catch (const nlohmann::json::exception& problem) {
+        error = path + ": " + problem.what();
+        return false;
+    }
+    return true;
+}
+
+// The game's own keys of items.json (the engine reads the rest).
+bool load_item_rules(GameData& data, const std::string& path, std::string& error) {
+    std::ifstream file(path);
+    if (!file) {
+        error = "cannot open " + path;
+        return false;
+    }
+    try {
+        const nlohmann::json root = nlohmann::json::parse(file);
+        for (const auto& item : root.at("items")) {
+            ItemRules rules;
+            rules.drop_chance = item.value("drop_chance", rules.drop_chance);
+            if (item.contains("effects")) {
+                const auto& effects = item.at("effects");
+                rules.burst_duration = effects.value("burst_duration", rules.burst_duration);
+                rules.golden_duration = effects.value("golden_duration", rules.golden_duration);
+            }
+            data.items[item.at("id").get<int>()] = rules;
+        }
+    } catch (const nlohmann::json::exception& problem) {
+        error = path + ": " + problem.what();
+        return false;
+    }
+    float total = 0;
+    for (const auto& [id, rules] : data.items) {
+        if (!std::isfinite(rules.drop_chance) || rules.drop_chance < 0 || rules.drop_chance > 1) {
+            error = path + ": invalid drop_chance for item " + std::to_string(id);
+            return false;
+        }
+        total += rules.drop_chance;
+    }
+    if (total > 1.0f) {
+        error = path + ": combined drop chances exceed 1";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 const GameData& GameData::none() {
@@ -95,7 +193,11 @@ bool load_game_data(GameData& data, const std::string& asset_dir, std::string& e
         error = "cannot load the game data in " + dir;
         return false;
     }
-    return load_levels(data, dir + "levels.json", error);
+    return load_zone_patterns(dir + "attack_patterns.json", data.zones, error) &&
+           load_origins(data, dir + "attack_patterns.json", error) &&
+           load_beam_patterns(dir + "attack_patterns.json", data.beams, error) &&
+           load_beam_casters(data, dir + "enemies.json", error) &&
+           load_item_rules(data, dir + "items.json", error) && load_levels(data, dir + "levels.json", error);
 }
 
 } // namespace ntype::server

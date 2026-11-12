@@ -40,7 +40,7 @@ void RecordDeath(World& world, int hitid, int hurtid) {
 // protected. Entities to remove are only noted in `dead`: removing them now would break
 // the loops that are still walking the maps.
 void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
-    if (world.Bullets.count(hitid) > 0 && world.Zones.count(hitid) == 0) {
+    if (world.Bullets.count(hitid) > 0) {
         dead.push_back(hitid);
     }
     auto health = world.Healths.find(hurtid);
@@ -74,11 +74,6 @@ void Hit(World& world, int hitid, int hurtid, std::vector<int>& dead) {
 void Collision(World& world) {
     std::vector<int> dead;
     for (auto& [hitid, hitbox] : world.Hitboxes) {
-        auto zone = world.Zones.find(hitid);
-        if (zone != world.Zones.end()) {
-            const auto owner = world.Healths.find(zone->second.Owner);
-            if (zone->second.Warning > 0 || owner == world.Healths.end() || owner->second.Hp <= 0) continue;
-        }
         auto hitlayer = world.Layers.find(hitid);
         if (hitlayer == world.Layers.end()) {
             continue;
@@ -89,13 +84,8 @@ void Collision(World& world) {
                 continue;
             }
             if (Touching(world, hitid, hurtid)) {
-                if (zone != world.Zones.end()) {
-                    float& cooldown = zone->second.HitCooldowns[hurtid];
-                    if (cooldown > 0) continue;
-                    cooldown = 2.0f;
-                }
                 Hit(world, hitid, hurtid, dead);
-                if (world.Bullets.count(hitid) > 0 && zone == world.Zones.end()) {
+                if (world.Bullets.count(hitid) > 0) {
                     break;  // a bullet hits only once
                 }
             }

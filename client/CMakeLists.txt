@@ -17,7 +17,7 @@ add_executable(r-type_client
     src/Hud.cpp
     src/ResultsScreen.cpp
 )
-target_link_libraries(r-type_client PRIVATE ntype_client_core)
+target_link_libraries(r-type_client PRIVATE ntype_client_core nlohmann_json::nlohmann_json)
 # ClientApp calls glViewport directly. SFML's shared Windows libraries do not pass
 # their OpenGL dependency on to us, so link it explicitly.
 find_package(OpenGL REQUIRED)

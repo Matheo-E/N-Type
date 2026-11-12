@@ -75,6 +75,9 @@ ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, Client
         !LoadAttackPatterns(world_, data_dir + "attack_patterns.json") ||
         !LoadItems(world_, data_dir + "items.json"))
         throw std::runtime_error("Unable to load the game data in " + data_dir);
+    if (std::string error; !load_zone_patterns(data_dir + "attack_patterns.json", zones_, error) ||
+                           !load_beam_patterns(data_dir + "attack_patterns.json", beams_, error))
+        throw std::runtime_error(error);
     if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
     if (!pause_gui_.buttons.loadFromFile(asset_dir + "/FreeGUI/png/Button.png") ||
         !pause_gui_.windows.loadFromFile(asset_dir + "/FreeGUI/png/Window.png"))
@@ -403,6 +406,10 @@ void ClientApp::sync_world() {
         if (entity.kind == config::kPlayerKind) centre += {config::kPlayerSize / 2.f, config::kPlayerSize / 2.f};
         for (const int part : {it->second.halo, it->second.sprite})
             if (part >= 0) world_.Positions[part].Xy = centre;
+        // A beam is faint while it warns (hp below 100), then full.
+        if (it->second.sprite >= 0 && entity.kind == static_cast<std::uint8_t>(protocol::EntityKind::EnemyShot) &&
+            beams_.contains(entity.type))
+            world_.Sprites[it->second.sprite].Color.a = entity.hp < 100 ? 70 : 255;
     }
 }
 
@@ -448,6 +455,10 @@ void ClientApp::add_mirror(Mirror& mirror, const protocol::Entity& entity) {
         if (!AddShotLook(world_, mirror.sprite, entity.type)) {
             world_.Destroy(mirror.sprite); // no sprite: an area attack, drawn as a ring
             mirror.sprite = -1;
+        } else if (const auto beam = beams_.find(entity.type); beam != beams_.end()) {
+            // A beam: its sprite stretched along the whole length (the data scale sets its thickness).
+            ESprite& look = world_.Sprites[mirror.sprite];
+            look.Scale.x = beam->second.length / static_cast<float>(std::max(look.Source.width, 1));
         }
         return;
     case EntityKind::Item:
@@ -519,7 +530,7 @@ void ClientApp::draw_area_attacks() {
         const auto pattern = world_.AttackPatterns.find(entity.type);
         if (pattern == world_.AttackPatterns.end() || pattern->second.TextureId >= 0) continue;
         const float radius = pattern->second.Radius;
-        const bool warning = pattern->second.TargetZone && entity.hp < 100;
+        const bool warning = zones_.contains(entity.type) && entity.hp < 100;
         const sf::Color colour = warning ? sf::Color(255, 195, 50) : sf::Color(255, 70, 70);
         sf::CircleShape ring(radius, 48);
         ring.setOrigin(radius, radius);

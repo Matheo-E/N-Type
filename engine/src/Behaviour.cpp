@@ -108,49 +108,22 @@ const EPosition* NearestPlayer(World& world, sf::Vector2f from) {
 
 // Fires one volley from spawnerid. Aimed volleys are centred on the nearest player.
 void Fire(World& world, int spawnerid, const AttackPattern& pattern) {
-    const sf::Vector2f centre = world.Positions[spawnerid].Xy;
-    if (pattern.TargetZone) {
-        // Short-lived zones stay bounded even with several casters.
-        if (world.Zones.size() >= 3) return;
-        int owned = 0;
-        for (const auto& [id, zone] : world.Zones) if (zone.Owner == spawnerid) ++owned;
-        if (owned >= 2) return;
-        const EPosition* target = NearestPlayer(world, centre);
-        if (target == nullptr) return;
-        const sf::Vector2f position = target->Xy;
-        const int id = CreateEBullet(world, spawnerid);
-        if (id < 0) return;
-        world.Positions[id].Xy = position;
-        world.Velocities[id].Xy = {0, 0};
-        world.Flights.erase(id);
-        // For a target zone, Lifetime is the active duration after its warning.
-        world.Lifetimes[id].Lifetime = pattern.WarningTime + pattern.Lifetime;
-        auto& zone = world.Zones[id];
-        zone.Owner = spawnerid;
-        zone.Warning = pattern.WarningTime;
-        zone.InitialWarning = pattern.WarningTime;
-        return;
+    const sf::Vector2f from = world.Positions[spawnerid].Xy;
+    const EPosition* player = NearestPlayer(world, from);
+    float base = pattern.AngleDegrees;
+    if (pattern.Aimed && player != nullptr) {
+        base = AngleTo(from, player->Xy);
     }
-    for (const auto& offset : pattern.Origins) {
-        const sf::Vector2f from = centre + offset;
-        const EPosition* player = NearestPlayer(world, from);
-        float base = pattern.AngleDegrees;
-        if (pattern.Aimed && player != nullptr) {
-            base = AngleTo(from, player->Xy);
+    for (int i = 0; i < pattern.Count; ++i) {
+        const int bullet = CreateEBullet(world, spawnerid);
+        if (bullet < 0) {
+            return;
         }
-        for (int i = 0; i < pattern.Count; ++i) {
-            const int bullet = CreateEBullet(world, spawnerid);
-            if (bullet < 0) {
-                return;
-            }
-            const float angle = BulletAngle(pattern, base, i);
-            world.Positions[bullet].Xy = from;
-            world.Velocities[bullet].Xy = Direction(angle) * pattern.Speed;
-            auto flight = world.Flights.find(bullet);  // a bullet with a flight pattern turns it to its own angle
-            if (flight != world.Flights.end()) {
-                flight->second.Origin = from;
-                flight->second.Heading = angle;
-            }
+        const float angle = BulletAngle(pattern, base, i);
+        world.Velocities[bullet].Xy = Direction(angle) * pattern.Speed;
+        auto flight = world.Flights.find(bullet);  // a bullet with a flight pattern turns it to its own angle
+        if (flight != world.Flights.end()) {
+            flight->second.Heading = angle;
         }
     }
 }
@@ -179,14 +152,6 @@ void Flight(World& world, float dt) {
         const EPosition* player = NearestPlayer(world, pos->second.Xy);
         const sf::Vector2f toplayer = player != nullptr ? player->Xy - pos->second.Xy : sf::Vector2f(0, 0);
         vel->second.Xy = FlightVelocity(pattern->second, flight, SpeedOf(world, id), toplayer);
-        const auto spawner = world.Spawners.find(id);
-        if (world.Enemies.count(id) > 0 && spawner != world.Spawners.end() && dt > 0) {
-            const auto attack = world.AttackPatterns.find(spawner->second.PatternId);
-            // Zone casters enter the arena, then stay reachable so the player can
-            // eliminate them and cancel their hazards before they expire.
-            if (attack != world.AttackPatterns.end() && attack->second.TargetZone && vel->second.Xy.x < 0)
-                vel->second.Xy.x = std::max(vel->second.Xy.x, (200.0f - pos->second.Xy.x) / dt);
-        }
     }
 }
 
@@ -226,27 +191,6 @@ void Spawner(World& world, float dt) {
             continue;
         }
         auto player = world.Players.find(id);
-        auto boost = world.Powerups.find(id);
-        if (player != world.Players.end() && boost != world.Powerups.end() && boost->second.BurstTime > 0) {
-            EPowerup& powerup = boost->second;
-            // Three volleys 0.1 s apart, then a 0.6 s pause. Releasing fire cancels
-            // the pending burst; normal cadence is preserved for when the bonus expires.
-            spawner.Timer = std::min(spawner.Timer, spawner.Interval);
-            powerup.BurstTimer += dt;
-            if (!player->second.Shoot) {
-                powerup.BurstRemaining = 0;
-                powerup.BurstTimer = std::min(powerup.BurstTimer, 0.6f);
-                continue;
-            }
-            const float interval = powerup.BurstRemaining > 0 ? 0.1f : 0.6f;
-            if (powerup.BurstTimer >= interval) {
-                powerup.BurstTimer = 0;
-                if (powerup.BurstRemaining == 0) powerup.BurstRemaining = 3;
-                --powerup.BurstRemaining;
-                firing.push_back(id);
-            }
-            continue;
-        }
         if (player != world.Players.end() && !player->second.Shoot) {
             spawner.Timer = std::min(spawner.Timer, spawner.Interval);
             continue;
@@ -266,21 +210,6 @@ void Spawner(World& world, float dt) {
 
 // Counts the lifetimes down and removes what has expired. Also ends invincibility.
 void Timers(World& world, float dt) {
-    for (auto& [id, zone] : world.Zones) {
-        zone.Warning = std::max(0.0f, zone.Warning - dt);
-        for (auto& [player, cooldown] : zone.HitCooldowns) cooldown = std::max(0.0f, cooldown - dt);
-    }
-    for (auto it = world.Powerups.begin(); it != world.Powerups.end();) {
-        auto& boost = it->second;
-        boost.BurstTime = std::max(0.0f, boost.BurstTime - dt);
-        boost.GoldenTime = std::max(0.0f, boost.GoldenTime - dt);
-        if (boost.BurstTime == 0) {
-            boost.BurstRemaining = 0;
-            boost.BurstTimer = 0.6f;
-        }
-        if (boost.BurstTime == 0 && boost.GoldenTime == 0) it = world.Powerups.erase(it);
-        else ++it;
-    }
     std::vector<int> expired;
     for (auto& [id, life] : world.Lifetimes) {
         life.Lifetime -= dt;

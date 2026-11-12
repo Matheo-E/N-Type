@@ -5,7 +5,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
 // Components are data only. Behaviour lives in the systems.
 // An empty class is a "tag": an entity either has it or does not.
@@ -178,15 +177,6 @@ public:
     int PatternId = -1;
 };
 
-// A temporary hazard. Its owner must stay alive; warning time is harmless.
-class EZone {
-public:
-    int Owner = -1;
-    float Warning = 2.5f;
-    float InitialWarning = 2.5f;
-    std::unordered_map<int, float> HitCooldowns;
-};
-
 // Something that died in Collision. The entity is already destroyed when the game reads
 // this, so what the game may need about it is copied here.
 class EDeath {
@@ -215,14 +205,6 @@ public:
 class EInvincible {
 public:
     float Time = 0;  // seconds left
-};
-
-class EPowerup {
-public:
-    float BurstTime = 0;
-    float BurstTimer = 0.6f;
-    int BurstRemaining = 0;
-    float GoldenTime = 0;
 };
 
 class ELifetime {

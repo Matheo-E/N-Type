@@ -31,6 +31,7 @@
     { "id": 29, "path": "sprites/items/tooth_item.png" },
     { "id": 30, "path": "sprites/items/file_item.png" },
     { "id": 31, "path": "sprites/items/sheild_item.png" },
-    { "id": 32, "path": "sprites/player/tooth_golden.png" }
+    { "id": 32, "path": "sprites/player/tooth_golden.png" },
+    { "id": 33, "path": "sprites/enemies/level_01_ice/ice_beam.png" }
   ]
 }

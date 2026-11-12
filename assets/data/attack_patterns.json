@@ -188,6 +188,13 @@
           "frame_time": 0.08
         }
       }
+    },
+    {
+      "id": 10,
+      "name": "theice_center_beam",
+      "damage": 2,
+      "beam": { "interval": 8.0, "warning_time": 1.3, "duration": 1.8, "origin": [1280, 360], "direction": [-1, 0], "length": 1280, "width": 96 },
+      "sprite": { "texture": 33, "rect": [0, 0, 724, 724], "scale": 0.307, "flip_x": true, "animation": { "frames": [0, 1, 2], "frame_time": 0.08 } }
     }
   ]
 }

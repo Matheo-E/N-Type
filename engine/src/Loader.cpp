@@ -1,7 +1,6 @@
 #include "../include/Loader.hpp"
 
 #include <fstream>
-#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -84,7 +83,6 @@ ItemData ReadItem(const nlohmann::json& item) {
     data.FlightPatternId = item.value("flight_pattern", data.FlightPatternId);
     data.Speed = item.value("speed", data.Speed);
     data.Lifetime = item.value("lifetime", data.Lifetime);
-    data.DropChance = item.value("drop_chance", data.DropChance);
     if (item.contains("sprite")) {
         ReadLook(item.at("sprite"), data);
     }
@@ -96,8 +94,6 @@ ItemData ReadItem(const nlohmann::json& item) {
         data.FireInterval = effects.value("fire_interval", data.FireInterval);
         data.ShootingType = effects.value("shooting_type", data.ShootingType);
         data.Invincibility = effects.value("invincibility", data.Invincibility);
-        data.BurstDuration = effects.value("burst_duration", data.BurstDuration);
-        data.GoldenDuration = effects.value("golden_duration", data.GoldenDuration);
         data.Attack = effects.value("attack", data.Attack);
         data.Defense = effects.value("defense", data.Defense);
     }
@@ -111,13 +107,6 @@ AttackPattern ReadAttack(const nlohmann::json& item) {
     pattern.SpreadDegrees = item.value("spread", pattern.SpreadDegrees);
     pattern.AngleDegrees = item.value("angle", pattern.AngleDegrees);
     pattern.Aimed = item.value("aimed", pattern.Aimed);
-    pattern.TargetZone = item.value("target_zone", pattern.TargetZone);
-    pattern.WarningTime = item.value("warning_time", pattern.WarningTime);
-    if (item.contains("origins")) {
-        pattern.Origins.clear();
-        for (const auto& origin : item.at("origins"))
-            pattern.Origins.push_back({origin.at(0).get<float>(), origin.at(1).get<float>()});
-    }
     pattern.Speed = item.value("speed", pattern.Speed);
     pattern.Damage = item.value("damage", pattern.Damage);
     pattern.Radius = item.value("radius", pattern.Radius);
@@ -233,41 +222,15 @@ bool LoadEnemies(World& world, const std::string& path) {
 }
 
 bool LoadItems(World& world, const std::string& path) {
-    if (!ReadList(path, "items", [&world](const nlohmann::json& item) {
+    return ReadList(path, "items", [&world](const nlohmann::json& item) {
         world.ItemTypes[item.at("id").get<int>()] = ReadItem(item);
         return true;
-    })) return false;
-    float total = 0;
-    for (const auto& [id, item] : world.ItemTypes) {
-        if (!std::isfinite(item.DropChance) || item.DropChance < 0 || item.DropChance > 1) {
-            std::cerr << path << ": invalid drop_chance for item " << id << '\n';
-            return false;
-        }
-        total += item.DropChance;
-    }
-    if (total > 1.0f) {
-        std::cerr << path << ": combined drop chances exceed 1\n";
-        return false;
-    }
-    return true;
+    });
 }
 
 bool LoadAttackPatterns(World& world, const std::string& path) {
     return ReadList(path, "attack_patterns", [&world](const nlohmann::json& item) {
-        AttackPattern pattern = ReadAttack(item);
-        if (pattern.TargetZone && (!std::isfinite(pattern.WarningTime) || pattern.WarningTime <= 0)) {
-            std::cerr << "attack pattern " << item.at("id") << ": warning_time must be positive\n";
-            return false;
-        }
-        if (pattern.TargetZone && (!std::isfinite(pattern.Lifetime) || pattern.Lifetime <= 0)) {
-            std::cerr << "attack pattern " << item.at("id") << ": active lifetime must be positive\n";
-            return false;
-        }
-        if (pattern.Origins.empty()) {
-            std::cerr << "attack pattern " << item.at("id") << ": origins must not be empty\n";
-            return false;
-        }
-        world.AttackPatterns[item.at("id").get<int>()] = std::move(pattern);
+        world.AttackPatterns[item.at("id").get<int>()] = ReadAttack(item);
         return true;
     });
 }

@@ -15,6 +15,8 @@
 
 #include "ClientNetwork.hpp"
 #include "World.hpp"
+#include "BeamPatterns.hpp"
+#include "ZonePatterns.hpp"
 #include "GuiSkin.hpp"
 #include "WindowState.hpp"
 #include "ControlsMenu.hpp"
@@ -99,6 +101,8 @@ private:
     GameExitAction exit_action_ = GameExitAction::Quit;
     // Engine world mirroring the latest snapshot: one entity per player.
     World world_;
+    std::map<int, ZonePattern> zones_; // attack patterns that are target zones (ZonePatterns.hpp)
+    std::map<int, BeamPattern> beams_; // attack patterns that are beams (BeamPatterns.hpp)
     // What the server sent, drawn by engine entities. A player is two: the coloured halo,
     // drawn first, and the tooth. Others have one sprite, or none (area attacks: rings).
     struct Mirror {

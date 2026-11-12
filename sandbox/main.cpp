@@ -170,6 +170,7 @@ int main() {
     while (window.isOpen()) {
         const float dt = clock.restart().asSeconds();
         Action(world, window, dt, player);
+        world.Deaths.clear();    // records for a game to react to: the sandbox does not need them
         if (!UpdateWave(world, wave)) {
             world.Destroy(wave.Leader);
             wave = SpawnWave(world);

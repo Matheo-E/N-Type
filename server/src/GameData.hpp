@@ -1,9 +1,12 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "World.hpp"
+#include "BeamPatterns.hpp"
+#include "ZonePatterns.hpp"
 
 namespace ntype::server {
 
@@ -27,10 +30,24 @@ struct Level {
     int support_max_alive = 2;
 };
 
+// What items do in this game beyond their engine effects (keys of assets/data/items.json).
+struct ItemRules {
+    float drop_chance = 0;     // "drop_chance": probability per non-boss kill; all items together <= 1
+    float burst_duration = 0;  // "effects.burst_duration": seconds of three-volley bursts
+    float golden_duration = 0; // "effects.golden_duration": seconds shown with the golden sprite
+};
+
 // Everything a game is built from, loaded once by the server and shared by every lobby.
 struct GameData {
     World definitions; // enemy types, patterns and items; no entities
     std::vector<Level> levels;
+    std::map<int, ZonePattern> zones;  // attack patterns that are target zones, by id
+    // Attack patterns fired from several points ("origins": [[x, y], ...], relative to the
+    // shooter), by id. The game fires these itself, one volley from each point.
+    std::map<int, std::vector<sf::Vector2f>> origins;
+    std::map<int, BeamPattern> beams;  // attack patterns that are beams, by id
+    std::map<int, int> beam_casters;   // enemy type -> its beam pattern ("beam_pattern" in enemies.json)
+    std::map<int, ItemRules> items;    // by item id
     bool invincible = false; // Temporary testing mode; all player ships are protected
 
     // No enemies and no levels: ships only (used when there is nothing to load, and by tests).
