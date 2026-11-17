@@ -41,10 +41,21 @@ python3 tests/network_smoke.py ./r-type_server
 | `game_test` | Simulation, waves, snapshots, score events |
 | `lobby_test` | Membership, leadership, spectators, lifecycle |
 | `client_network_test` | Retries, transitions, snapshot assembly |
+| `player_profile_test` | Records, bindings, accessibility persistence and automatic fire |
 | `network_smoke.py` | Real UDP behavior and timeouts |
 
 For UI/audio work, manually test several window sizes, Escape, F11, leave/rejoin,
-spectator mode, and both victory and defeat.
+spectator mode, and both victory and defeat. For accessibility and help, check:
+
+- Open **Comment jouer** on the title screen, in settings and in pause; verify the
+  lore and current device bindings, then return with Retour or Escape.
+- Open **Accessibilite** in settings and pause; use mouse and Tab/arrows + Enter.
+- Enable reduced motion: the scenery stays still and hits do not shake the camera.
+- Enable impact flash removal: characters do not flash or blink after hits.
+- Enable automatic fire: shots require no held button and stop during local pause,
+  loss of focus, results and spectator mode. Server cadence remains unchanged.
+- Restart: preferences, bindings and personal records survive. Resetting controls
+  preserves accessibility. A profile save failure appears in the panel.
 
 ## Generate the API reference
 

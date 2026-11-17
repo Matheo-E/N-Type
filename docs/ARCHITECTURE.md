@@ -59,6 +59,20 @@ and exposes state to the UI. Tests can therefore exercise networking without a w
 world is presentation-only: sprites, animation, hit flashes, explosions, parallax,
 audio, HUD, and rendering. It never becomes authoritative.
 
+`PlayerProfile` stores local best scores per name, bindings, the active device and
+accessibility options in the client JSON profile. `ControlsMenu` edits bindings;
+`AssistanceMenu` shares accessibility and gameplay help between launcher and pause.
+The title screen also exposes help. Accessibility uses three optional booleans:
+`reduced_motion`, `no_flashes`, `auto_fire`, each false by default. Old profiles
+remain compatible, and invalid optional values retain their defaults. Resetting
+controls preserves scores and accessibility settings.
+
+`ClientApp` freezes parallax and removes camera shake for reduced motion, and
+suppresses hit flashes/blinking for flash removal. `PlayerProfile::input` adds the
+normal Shoot bit for automatic fire. `ClientApp::read_input` returns zero before
+reading controls during pause, results, loss of focus or spectator mode. The
+server retains shooting cadence and damage authority. No engine change is needed.
+
 ## ECS model
 
 - An **entity** is an integer ID.
@@ -132,6 +146,8 @@ frame meanwhile. See [Protocol v2](PROTOCOL_v2.md).
 | --- | --- |
 | `client/src/Launcher.cpp` | Title, connection, menus, lobby screens, settings |
 | `client/src/ClientNetwork.*` | Session and snapshot reassembly |
+| `client/src/PlayerProfile.*` | Persistent local scores, controls and accessibility |
+| `client/src/AssistanceMenu.*` | Accessibility panel and lore/gameplay help |
 | `client/src/ClientApp.*` | Gameplay presentation and snapshot mirroring |
 | `server/src/Server.*` | Main loop, clients, routing, timeouts, sends |
 | `server/src/Lobby.*` | Membership, roles, lifecycle, score, progression |
@@ -147,5 +163,5 @@ frame meanwhile. See [Protocol v2](PROTOCOL_v2.md).
 ## Known boundaries
 
 The architecture omits client prediction, interpolation, lag compensation,
-persistence, authentication, encryption, server migration, and wire-version
+server-side persistence, authentication, encryption, server migration, and wire-version
 negotiation. Incompatible packet changes require coordinated client/server updates.

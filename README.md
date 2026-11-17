@@ -15,6 +15,8 @@ and automated tests.
 - Server-authoritative movement, combat, waves, scores, and level progression
 - Three levels with parallax backgrounds, music, enemies, and bosses
 - Data-driven enemies, attacks, flight patterns, items, levels, and textures
+- Persistent keyboard, mouse and gamepad controls, personal records and accessibility
+- In-game help featuring M. Jean Cive on the way to the dentist
 - Linux and Windows builds through CMake and vcpkg
 
 ## Quick start
@@ -90,8 +92,10 @@ with the server computer's IPv4 address and allow inbound UDP port 4242.
 | Pause / back | Escape |
 | Fullscreen | F11 |
 
-The Controls menu is currently a visual preview; input remapping and mouse/gamepad
-gameplay are not implemented. See the [User Guide](docs/USER_GUIDE.md) for menus,
+**Controles** supports keyboard, mouse and gamepad remapping. **Accessibilite**
+adds reduced motion, impact flash removal and automatic fire, saved locally.
+**Comment jouer**, on the title screen, in settings and pause, explains the controls
+and M. Jean Cive's journey to the dentist while under attack. See the [User Guide](docs/USER_GUIDE.md) for menus,
 hosting, settings, and troubleshooting.
 
 ## Documentation

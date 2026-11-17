@@ -109,11 +109,11 @@ void hits_counted()
     const sf::Vector2f where = {640, 360};
     const int chomper = CreateEEnemy(world, where, kChomper); // 10 HP
     for (int shot = 0; shot < 3; ++shot) {
-        const int bullet = CreateEBullet(world, player); // 1 damage each
+        const int bullet = CreateEBullet(world, player); // 2 damage each
         world.Positions[bullet].Xy = where;
         Collision(world);
     }
-    assert(world.Healths[chomper].Hits == 3 && world.Healths[chomper].Hp == 7);
+    assert(world.Healths[chomper].Hits == 3 && world.Healths[chomper].Hp == 4);
 }
 
 } // namespace

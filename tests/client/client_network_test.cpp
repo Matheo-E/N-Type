@@ -1,4 +1,5 @@
 #include "client/src/ClientNetwork.hpp"
+#include "client/src/PlayerProfile.hpp"
 #include "server/src/Server.hpp"
 
 #include <algorithm>
@@ -156,6 +157,16 @@ void snapshot_parts() {
     server.send(protocol::makeLobbyState(state));
     settle();
     assert(client.phase() == Phase::InLobby);
+    auto& profile = ntype::client::PlayerProfile::shared();
+    const auto record = profile.best_score("Me") + 100;
+    state.members[0].score = record;
+    server.send(protocol::makeLobbyState(state));
+    settle();
+    assert(profile.best_score("Me") == record);
+    state.members[0].score = 0;
+    server.send(protocol::makeLobbyState(state));
+    settle();
+    assert(profile.best_score("Me") == record);
 
     const protocol::Entity ship{1, 1, 10, 20, 0, 100};
     const protocol::Entity enemy{40, 2, 600, 300, 3, 50};

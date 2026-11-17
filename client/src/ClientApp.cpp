@@ -19,6 +19,7 @@
 #include "BackgroundConfig.hpp"
 #include "GameConfig.hpp"
 #include "Protocol.hpp"
+#include "PlayerProfile.hpp"
 #include "System.hpp"
 #include "UiClickSound.hpp"
 #include "UiFont.hpp"
@@ -32,6 +33,7 @@ namespace {
 
 
 constexpr int kPlayerTexture = 1;  // id of sprites/player/tooth.png in assets/data/textures.json
+constexpr int kGoldenTexture = 32; // same three animation frames as the normal tooth
 constexpr int kHaloTexture = 21;   // id of sprites/player/tooth_halo.png (tools/make_tooth_halo.py)
 // Halo frames are 4x smaller than the tooth's, plus 28 pixels of margin on each side.
 constexpr int kHaloFrameSize = 237;
@@ -54,13 +56,11 @@ const sf::FloatRect kContinueButton{430.f, 185.f, 420.f, 110.f};
 const sf::FloatRect kLobbyInfo{340.f, 315.f, 600.f, 110.f};
 const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
-const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
+const sf::FloatRect kControlsButton{345.f, 562.f, 190.f, 56.f};
+const sf::FloatRect kAccessibilityButton{545.f, 562.f, 190.f, 56.f};
+const sf::FloatRect kHelpButton{745.f, 562.f, 190.f, 56.f};
 const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
 
-
-constexpr std::uint8_t bit(const protocol::InputType key) {
-    return static_cast<std::uint8_t>(key);
-}
 
 } // namespace
 
@@ -77,6 +77,9 @@ ClientApp::ClientApp(sf::RenderWindow& window, WindowState& window_state, Client
         !LoadAttackPatterns(world_, data_dir + "attack_patterns.json") ||
         !LoadItems(world_, data_dir + "items.json"))
         throw std::runtime_error("Unable to load the game data in " + data_dir);
+    if (std::string error; !load_zone_patterns(data_dir + "attack_patterns.json", zones_, error) ||
+                           !load_beam_patterns(data_dir + "attack_patterns.json", beams_, error))
+        throw std::runtime_error(error);
     if (!load_ui_font(ui_font_)) throw std::runtime_error("Unable to load the UI font");
     if (!pause_gui_.buttons.loadFromFile(asset_dir + "/FreeGUI/png/Button.png") ||
         !pause_gui_.windows.loadFromFile(asset_dir + "/FreeGUI/png/Window.png"))
@@ -226,6 +229,7 @@ GameExitAction ClientApp::run() {
                 results_open_ = true;
                 pause_menu_open_ = false;
                 controls_menu_.open = false;
+                assistance_menu_.open = false;
             }
         } else if (results_open_) {
             results_open_ = false; // The leader started again: straight into the new game.
@@ -245,6 +249,13 @@ GameExitAction ClientApp::run() {
 void ClientApp::poll_events() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
+        sf::Event released = event;
+        if (event.type == sf::Event::KeyReleased) released.type = sf::Event::KeyPressed;
+        if (event.type == sf::Event::MouseButtonReleased) released.type = sf::Event::MouseButtonPressed;
+        if (event.type == sf::Event::JoystickButtonReleased) released.type = sf::Event::JoystickButtonPressed;
+        if (event.type == sf::Event::LostFocus ||
+            (released.type != event.type && PlayerProfile::shared().pause_event(released))) pause_held_ = false;
+        if (assistance_menu_.open && assistance_menu_.handle_event(window_, event)) continue;
         if (controls_menu_.open && controls_menu_.handle_event(window_, event)) {
             continue;
         }
@@ -275,8 +286,13 @@ void ClientApp::poll_events() {
             if (event.type == sf::Event::Resized) update_view();
             continue;
         }
-        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
-            pause_menu_open_ = !pause_menu_open_;
+        // Left clicks on an open pause menu operate its buttons.
+        const bool menu_click = pause_menu_open_ && event.type == sf::Event::MouseButtonPressed &&
+                                event.mouseButton.button == sf::Mouse::Left;
+        if (!menu_click && window_.hasFocus() && PlayerProfile::shared().pause_event(event)) {
+            if (!pause_held_) pause_menu_open_ = !pause_menu_open_;
+            pause_held_ = true;
+            continue;
         }
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
             window_state_.toggle_fullscreen(window_, "N-Type");
@@ -289,6 +305,10 @@ void ClientApp::poll_events() {
             if (kMenuButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = !pause_menu_open_;
+            } else if (pause_menu_open_ && (kAccessibilityButton.contains(point) || kHelpButton.contains(point))) {
+                UiClickSound::instance().play();
+                assistance_menu_.help = kHelpButton.contains(point);
+                assistance_menu_.open = true;
             } else if (pause_menu_open_ && kControlsButton.contains(point)) {
                 UiClickSound::instance().play();
                 controls_menu_.open = true;
@@ -321,26 +341,43 @@ std::uint8_t ClientApp::read_input() const {
     if (!window_.hasFocus() || pause_menu_open_ || results_open_ || network_.is_spectator()) {
         return 0;
     }
-    using Key = sf::Keyboard::Key;
-    using protocol::InputType;
-    const auto pressed = [](const Key key) { return sf::Keyboard::isKeyPressed(key); };
-    std::uint8_t bits = 0;
-    if (pressed(Key::Up) || pressed(Key::W) || pressed(Key::Z)) {
-        bits |= bit(InputType::Up);
+    const auto& profile = PlayerProfile::shared();
+    ControlState state;
+    for (int key = 0; key < sf::Keyboard::KeyCount; ++key)
+        state.keys[static_cast<std::size_t>(key)] = sf::Keyboard::isKeyPressed(static_cast<sf::Keyboard::Key>(key));
+    if (profile.device() == ControlDevice::Mouse) {
+        for (int button = 0; button < sf::Mouse::ButtonCount; ++button)
+            state.mouse[static_cast<std::size_t>(button)] = sf::Mouse::isButtonPressed(static_cast<sf::Mouse::Button>(button));
+        const auto cursor = window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
+        for (const auto& player : network_.players()) {
+            if (network_.lobby() && player.id == network_.lobby()->yourSlot) {
+                const float dx = cursor.x - (static_cast<float>(player.x) + config::kPlayerSize / 2.f);
+                const float dy = cursor.y - (static_cast<float>(player.y) + config::kPlayerSize / 2.f);
+                state.x = std::abs(dx) > 12.f ? dx : 0;
+                state.y = std::abs(dy) > 12.f ? dy : 0;
+            }
+        }
+    } else if (profile.device() == ControlDevice::Gamepad) {
+        for (unsigned joystick = 0; joystick < sf::Joystick::Count; ++joystick) {
+            if (!sf::Joystick::isConnected(joystick)) continue;
+            for (unsigned button = 0; button < sf::Joystick::getButtonCount(joystick); ++button)
+                state.buttons[button] = sf::Joystick::isButtonPressed(joystick, button);
+            const auto axis = [joystick](sf::Joystick::Axis primary, sf::Joystick::Axis dpad) {
+                float value = sf::Joystick::hasAxis(joystick, primary) ? sf::Joystick::getAxisPosition(joystick, primary) : 0.f;
+                if (std::abs(value) <= 25.f && sf::Joystick::hasAxis(joystick, dpad))
+                    value = sf::Joystick::getAxisPosition(joystick, dpad);
+                return std::abs(value) > 25.f ? value : 0.f;
+            };
+            state.x = axis(sf::Joystick::X, sf::Joystick::PovX);
+            // SFML's vertical D-pad axis is positive upwards, unlike the stick Y axis.
+            const float y = sf::Joystick::hasAxis(joystick, sf::Joystick::Y) ? sf::Joystick::getAxisPosition(joystick, sf::Joystick::Y) : 0.f;
+            state.y = std::abs(y) > 25.f ? y : sf::Joystick::hasAxis(joystick, sf::Joystick::PovY)
+                ? -sf::Joystick::getAxisPosition(joystick, sf::Joystick::PovY) : 0.f;
+            if (std::abs(state.y) <= 25.f) state.y = 0;
+            break;
+        }
     }
-    if (pressed(Key::Down) || pressed(Key::S)) {
-        bits |= bit(InputType::Down);
-    }
-    if (pressed(Key::Left) || pressed(Key::A) || pressed(Key::Q)) {
-        bits |= bit(InputType::Left);
-    }
-    if (pressed(Key::Right) || pressed(Key::D)) {
-        bits |= bit(InputType::Right);
-    }
-    if (pressed(Key::Space)) {
-        bits |= bit(InputType::Shoot);
-    }
-    return bits;
+    return profile.input(state);
 }
 
 void ClientApp::sync_world() {
@@ -352,7 +389,7 @@ void ClientApp::sync_world() {
     for (auto it = entities_.begin(); it != entities_.end();) {
         const auto found = current.find(it->first);
         if (found == current.end() || found->second->kind != it->second.kind ||
-            found->second->type != it->second.type) {
+            (it->second.kind != config::kPlayerKind && found->second->type != it->second.type)) {
             if (it->second.halo >= 0) world_.Destroy(it->second.halo);
             if (it->second.sprite >= 0) world_.Destroy(it->second.sprite);
             it = entities_.erase(it);
@@ -368,6 +405,7 @@ void ClientApp::sync_world() {
             on_hit(it->second, entity);
         }
         it->second.hits = entity.hits;
+        it->second.type = entity.type;
         if (entity.kind == config::kPlayerKind) set_player_look(it->second, entity.hp);
         // The server is authoritative: positions are copied, never simulated here. It gives
         // a player's top-left corner and the centre of everything else; the engine draws
@@ -376,6 +414,10 @@ void ClientApp::sync_world() {
         if (entity.kind == config::kPlayerKind) centre += {config::kPlayerSize / 2.f, config::kPlayerSize / 2.f};
         for (const int part : {it->second.halo, it->second.sprite})
             if (part >= 0) world_.Positions[part].Xy = centre;
+        // A beam is faint while it warns (hp below 100), then full.
+        if (it->second.sprite >= 0 && entity.kind == static_cast<std::uint8_t>(protocol::EntityKind::EnemyShot) &&
+            beams_.contains(entity.type))
+            world_.Sprites[it->second.sprite].Color.a = entity.hp < 100 ? 70 : 255;
     }
 }
 
@@ -421,6 +463,10 @@ void ClientApp::add_mirror(Mirror& mirror, const protocol::Entity& entity) {
         if (!AddShotLook(world_, mirror.sprite, entity.type)) {
             world_.Destroy(mirror.sprite); // no sprite: an area attack, drawn as a ring
             mirror.sprite = -1;
+        } else if (const auto beam = beams_.find(entity.type); beam != beams_.end()) {
+            // A beam: its sprite stretched along the whole length (the data scale sets its thickness).
+            ESprite& look = world_.Sprites[mirror.sprite];
+            look.Scale.x = beam->second.length / static_cast<float>(std::max(look.Source.width, 1));
         }
         return;
     case EntityKind::Item:
@@ -446,15 +492,20 @@ void ClientApp::on_hit(Mirror& mirror, const protocol::Entity& entity) {
 
 /** @brief The tooth wears its damage: intact at full health, damaged, broken at 1 HP of 3. */
 void ClientApp::set_player_look(Mirror& mirror, const std::uint8_t hp) {
-    const int look = hp >= 100 ? 0 : hp > 34 ? 1 : 2;
+    const int look = mirror.type == protocol::kGoldenPlayer ? 3 : hp >= 100 ? 0 : hp > 34 ? 1 : 2;
     if (look == mirror.look || mirror.sprite < 0 || mirror.halo < 0) return;
     mirror.look = look;
-    world_.Sprites[mirror.sprite].TextureId = kToothLooks[look];
-    world_.Sprites[mirror.halo].TextureId = kHaloLooks[look];
+    world_.Sprites[mirror.sprite].TextureId = look == 3 ? kGoldenTexture : kToothLooks[look];
+    world_.Sprites[mirror.halo].TextureId = look == 3 ? kHaloTexture : kHaloLooks[look];
 }
 
 void ClientApp::update_impacts(const float elapsed_seconds) {
+    const auto& options = PlayerProfile::shared().accessibility();
     for (auto& [id, mirror] : entities_) {
+        if (options.no_flashes) {
+            mirror.flash = 0.f;
+            mirror.blink = 0.f;
+        }
         mirror.flash = std::max(0.f, mirror.flash - elapsed_seconds);
         mirror.blink = std::max(0.f, mirror.blink - elapsed_seconds);
         if (mirror.sprite < 0) continue;
@@ -474,6 +525,7 @@ void ClientApp::update_impacts(const float elapsed_seconds) {
         if (mirror.halo >= 0) world_.Sprites[mirror.halo].Color.a = dim ? 60 : kHaloOpacity;
     }
     shake_ = std::max(0.f, shake_ - elapsed_seconds);
+    if (options.reduced_motion) shake_ = 0.f;
     if (shake_ > 0.f) {
         // Our player was hit: the whole game view jolts, less and less.
         const float amplitude = kShakePixels * shake_ / kShakeSeconds;
@@ -492,13 +544,23 @@ void ClientApp::draw_area_attacks() {
         const auto pattern = world_.AttackPatterns.find(entity.type);
         if (pattern == world_.AttackPatterns.end() || pattern->second.TextureId >= 0) continue;
         const float radius = pattern->second.Radius;
+        const bool warning = zones_.contains(entity.type) && entity.hp < 100;
+        const sf::Color colour = warning ? sf::Color(255, 195, 50) : sf::Color(255, 70, 70);
         sf::CircleShape ring(radius, 48);
         ring.setOrigin(radius, radius);
         ring.setPosition(static_cast<float>(entity.x), static_cast<float>(entity.y));
-        ring.setFillColor(sf::Color(255, 90, 90, 55));
-        ring.setOutlineColor(sf::Color(255, 70, 70, 190));
+        ring.setFillColor(sf::Color(colour.r, colour.g, colour.b, warning ? 25 : 65));
+        ring.setOutlineColor(sf::Color(colour.r, colour.g, colour.b, 220));
         ring.setOutlineThickness(-4.f);
         window_.draw(ring);
+        if (warning) {
+            const float progress = static_cast<float>(entity.hp) / 100.f;
+            sf::CircleShape timer(radius * progress, 48);
+            timer.setOrigin(radius * progress, radius * progress);
+            timer.setPosition(ring.getPosition());
+            timer.setFillColor(sf::Color(255, 195, 50, 70));
+            window_.draw(timer);
+        }
     }
 }
 
@@ -621,10 +683,13 @@ void ClientApp::draw_pause_menu() {
     pause_gui_.button(window_, ui_font_, kClickSoundButton,
                       sound_enabled ? "Son : ON" : "Son : OFF", mouse, pressed,
                       true, sound_enabled ? 1 : 2, 20);
-    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 24);
+    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 20);
+    pause_gui_.button(window_, ui_font_, kAccessibilityButton, "Accessibilite", mouse, pressed, true, 0, 19);
+    pause_gui_.button(window_, ui_font_, kHelpButton, "Comment jouer", mouse, pressed, true, 0, 18);
     if (controls_menu_.open) {
         controls_menu_.draw(window_, ui_font_, pause_gui_);
     }
+    if (assistance_menu_.open) assistance_menu_.draw(window_, ui_font_, pause_gui_);
 }
 
 void ClientApp::render() {
@@ -634,7 +699,9 @@ void ClientApp::render() {
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);
     update_impacts(elapsed_seconds);
-    automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
+    if (!PlayerProfile::shared().accessibility().reduced_motion) {
+        automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
+    }
     window_.clear(sf::Color::Black);
     draw_parallax();
 

@@ -43,6 +43,9 @@ int main()
            snapshot->entities[1].type == 4 && snapshot->entities[1].hp == 37 &&
            snapshot->entities[1].hits == 200);
     assert(decode(makeWorldSnapshot(8, 0, 1, {}))->entities.empty());
+    entities[0].type = kGoldenPlayer;
+    const auto golden = decode(makeWorldSnapshot(8, 0, 1, entities));
+    assert(golden && golden->entities[0].type == kGoldenPlayer && golden->entities[0].hp == 100);
 
     // A big frame is split into parts of at most 90 entities (1268 bytes), which add back up.
     std::vector<Entity> crowd(200, Entity{300, 3, 10, 20, 0, 0, 0});

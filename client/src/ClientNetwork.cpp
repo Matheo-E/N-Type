@@ -7,6 +7,7 @@
 #include <system_error>
 
 #include "GameConfig.hpp"
+#include "PlayerProfile.hpp"
 
 namespace ntype::client {
 
@@ -222,6 +223,10 @@ void ClientNetwork::on_state(const protocol::LobbyState& state) {
         return;
     }
     lobby_ = state;
+    for (const auto& member : state.members) {
+        if (member.slot == state.yourSlot && member.name == name_)
+            PlayerProfile::shared().record_score(name_, member.score);
+    }
     if (state.state != LobbyPhase::Playing) {
         clear_world();
     }

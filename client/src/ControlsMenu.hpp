@@ -4,7 +4,7 @@
 
 namespace ntype::client {
 
-/** Visual control settings only. Gameplay bindings are not changed here. */
+/** Edits the persistent bindings used immediately by gameplay. */
 class ControlsMenu {
 public:
     bool open = false;
@@ -13,8 +13,6 @@ public:
     void draw(sf::RenderWindow& window, const sf::Font& font, const GuiSkin& gui) const;
 
 private:
-    enum class Device { Keyboard, Mouse, Gamepad };
-    Device device_ = Device::Keyboard;
     int selected_action_ = -1;
 
     sf::View make_view(const sf::RenderWindow& window) const;

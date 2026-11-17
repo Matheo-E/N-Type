@@ -2,12 +2,106 @@
   "items": [
     {
       "id": 1,
-      "name": "rapid_fire",
-      "radius": 16,
-      "sprite": { "texture": 20, "rect": [0, 0, 1536, 1024], "scale": 0.026 },
+      "name": "double_shot",
+      "radius": 30,
+      "sprite": {
+        "texture": 20,
+        "rect": [0, 0, 1536, 1024],
+        "scale": 0.0520833
+      },
       "flight_pattern": 2,
-      "speed": 100,
-      "effects": { "fire_interval": -0.05 }
+      "speed": 70,
+      "lifetime": 20,
+      "effects": {
+        "shooting_type": 20
+      },
+      "drop_chance": 0.02
+    },
+    {
+      "id": 2,
+      "name": "triple_shot",
+      "radius": 30,
+      "sprite": {
+        "texture": 27,
+        "rect": [0, 0, 1536, 1024],
+        "scale": 0.0520833
+      },
+      "flight_pattern": 2,
+      "speed": 70,
+      "lifetime": 18,
+      "effects": {
+        "shooting_type": 21
+      },
+      "drop_chance": 0.005
+    },
+    {
+      "id": 3,
+      "name": "quadruple_shot",
+      "radius": 30,
+      "sprite": {
+        "texture": 28,
+        "rect": [0, 0, 1024, 683],
+        "scale": 0.078125
+      },
+      "flight_pattern": 2,
+      "speed": 70,
+      "lifetime": 16,
+      "effects": {
+        "shooting_type": 22
+      },
+      "drop_chance": 0.001
+    },
+    {
+      "id": 4,
+      "name": "toothbrush",
+      "radius": 30,
+      "sprite": {
+        "texture": 29,
+        "rect": [0, 0, 1536, 1024],
+        "scale": 0.0520833
+      },
+      "flight_pattern": 2,
+      "speed": 70,
+      "lifetime": 12,
+      "effects": {
+        "heal": 1
+      },
+      "drop_chance": 0.15
+    },
+    {
+      "id": 5,
+      "name": "dental_floss",
+      "radius": 30,
+      "sprite": {
+        "texture": 30,
+        "rect": [0, 0, 1536, 1024],
+        "scale": 0.0520833
+      },
+      "flight_pattern": 2,
+      "speed": 70,
+      "lifetime": 10,
+      "effects": {
+        "burst_duration": 10
+      },
+      "drop_chance": 0.12
+    },
+    {
+      "id": 6,
+      "name": "golden_shield",
+      "radius": 30,
+      "sprite": {
+        "texture": 31,
+        "rect": [0, 0, 1536, 1024],
+        "scale": 0.0520833
+      },
+      "flight_pattern": 2,
+      "speed": 70,
+      "lifetime": 8,
+      "effects": {
+        "invincibility": 10,
+        "golden_duration": 10
+      },
+      "drop_chance": 0.08
     }
   ]
 }

@@ -18,15 +18,17 @@ int main(int argc, char** argv) {
     try {
         const ntype::Options options = ntype::parse_options(argc, argv, ntype::Application::Server);
         if (options.help) {
-            std::cout << "USAGE: ./r-type_server [-p port] [--no-enemies]\n"
+            std::cout << "USAGE: ./r-type_server [-p port] [--no-enemies] [--invincible]\n"
                          "  -p port        UDP port to listen on (default 4242)\n"
                          "  --no-enemies   games have no enemies, only ships (for tests)\n"
+                         "  --invincible   temporary test mode: players cannot take damage\n"
                          "Console commands: level <code>, gameover <code>, score <code> <slot> <points>\n";
             return 0;
         }
         std::signal(SIGINT, on_signal);
         std::signal(SIGTERM, on_signal);
-        ntype::server::Server server(options.port, options.no_enemies);
+        if (options.invincible) std::cout << "[server] Temporary test mode: all players are invincible\n";
+        ntype::server::Server server(options.port, options.no_enemies, options.invincible);
 #ifndef _WIN32
         // Started in the background (`&`), reading the terminal would stop the whole
         // server; ignoring SIGTTIN makes the read fail and the console thread end.

@@ -22,8 +22,9 @@ constexpr float kDt = 1.0F / kTickRate;
 constexpr auto kTimeout = std::chrono::seconds(5);
 constexpr std::uint32_t kStateEvery = 6; // ticks: 10 lobby states per second
 
-GameData load_or_throw(const bool no_enemies) {
+GameData load_or_throw(const bool no_enemies, const bool invincible) {
     GameData data;
+    data.invincible = invincible;
     if (no_enemies) {
         return data;
     }
@@ -36,8 +37,8 @@ GameData load_or_throw(const bool no_enemies) {
 
 } // namespace
 
-Server::Server(const std::uint16_t port, const bool no_enemies)
-    : data_(load_or_throw(no_enemies)), network_(port), lobbies_(std::random_device{}(), data_) {
+Server::Server(const std::uint16_t port, const bool no_enemies, const bool invincible)
+    : data_(load_or_throw(no_enemies, invincible)), network_(port), lobbies_(std::random_device{}(), data_) {
     std::cout << "[server] " << data_.levels.size() << " levels loaded" << std::endl;
     std::cout << "[server] listening on UDP port " << network_.port() << std::endl;
 }
