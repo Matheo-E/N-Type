@@ -10,6 +10,7 @@ target_link_libraries(ntype_client_core PRIVATE nlohmann_json::nlohmann_json)
 add_executable(r-type_client
     src/main.cpp
     src/Launcher.cpp
+    src/AssistanceMenu.cpp
     src/ControlsMenu.cpp
     src/ClientApp.cpp
     src/ExplosionEffects.cpp

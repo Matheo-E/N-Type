@@ -489,12 +489,22 @@ These are mistakes that have already happened in this project.
 
 ---
 
-## 10. What is not built yet
+## 10. Client menus and remaining work
 
-- Networked room creation/discovery, isolation, synchronized capacity and membership.
-- Input remapping, binding persistence and mouse/gamepad gameplay integration.
-- Score calculation, best-score persistence, game over and boss-driven progression.
-- Server-driven enemies, combat and wave scheduling in the current network game.
+`client/src/AssistanceMenu.cpp` provides the same accessibility and help panels in
+launcher settings and pause, with help also on the title screen. It uses the
+existing FreeGUI skin, with mouse and keyboard navigation inside the panel.
+`PlayerProfile` stores three boolean fields under `accessibility` in the local
+JSON profile: `reduced_motion`, `no_flashes`, and `auto_fire`. Missing or invalid
+optional values keep their defaults (false); resetting bindings keeps these
+settings. `ClientApp` applies the visual options while rendering. Automatic fire
+adds the usual Shoot input bit, after the client has excluded pause, lost focus,
+results and spectators. The server still controls shooting cadence and damage.
+The help shows M. Jean Cive's journey to the dentist and current bindings.
+No engine or protocol changes are needed for these menus.
+
+Lobbies, persistent controls and scores, server combat and boss-driven progression
+are implemented. Remaining work includes:
 - Generic ECS UI/audio/animation integration. The client already has its own
   FreeGUI menus, sound and continuously animated tooth sprite.
 - Prediction/interpolation and reliable delivery for messages that would need it.

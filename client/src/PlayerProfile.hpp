@@ -14,6 +14,12 @@ namespace ntype::client {
 enum class ControlDevice { Keyboard, Mouse, Gamepad };
 enum ControlAction { Up, Down, Left, Right, Shoot, Pause, ActionCount };
 
+struct AccessibilitySettings {
+    bool reduced_motion = false;
+    bool no_flashes = false;
+    bool auto_fire = false;
+};
+
 struct ControlState {
     std::array<bool, sf::Keyboard::KeyCount> keys{};
     std::array<bool, sf::Mouse::ButtonCount> mouse{};
@@ -33,6 +39,8 @@ public:
     bool bind_gamepad(int action, unsigned button);
     bool select_device(ControlDevice device);
     bool reset_controls();
+    bool set_accessibility(AccessibilitySettings settings);
+    const AccessibilitySettings& accessibility() const { return accessibility_; }
     std::string binding_name(int action) const;
     std::uint8_t input(const ControlState& state) const;
     bool pause_event(const sf::Event& event) const;
@@ -45,6 +53,7 @@ private:
     bool save();
     std::filesystem::path path_;
     std::map<std::string, std::uint32_t> scores_;
+    AccessibilitySettings accessibility_;
     ControlDevice device_ = ControlDevice::Keyboard;
     std::array<std::vector<int>, ActionCount> keys_;
     std::array<int, ActionCount> mouse_;

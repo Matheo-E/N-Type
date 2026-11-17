@@ -56,7 +56,9 @@ const sf::FloatRect kContinueButton{430.f, 185.f, 420.f, 110.f};
 const sf::FloatRect kLobbyInfo{340.f, 315.f, 600.f, 110.f};
 const sf::FloatRect kLobbyButton{350.f, 450.f, 180.f, 100.f};
 const sf::FloatRect kMusicButton{550.f, 450.f, 180.f, 100.f};
-const sf::FloatRect kControlsButton{480.f, 562.f, 320.f, 56.f};
+const sf::FloatRect kControlsButton{345.f, 562.f, 190.f, 56.f};
+const sf::FloatRect kAccessibilityButton{545.f, 562.f, 190.f, 56.f};
+const sf::FloatRect kHelpButton{745.f, 562.f, 190.f, 56.f};
 const sf::FloatRect kClickSoundButton{750.f, 450.f, 180.f, 100.f};
 
 
@@ -227,6 +229,7 @@ GameExitAction ClientApp::run() {
                 results_open_ = true;
                 pause_menu_open_ = false;
                 controls_menu_.open = false;
+                assistance_menu_.open = false;
             }
         } else if (results_open_) {
             results_open_ = false; // The leader started again: straight into the new game.
@@ -252,6 +255,7 @@ void ClientApp::poll_events() {
         if (event.type == sf::Event::JoystickButtonReleased) released.type = sf::Event::JoystickButtonPressed;
         if (event.type == sf::Event::LostFocus ||
             (released.type != event.type && PlayerProfile::shared().pause_event(released))) pause_held_ = false;
+        if (assistance_menu_.open && assistance_menu_.handle_event(window_, event)) continue;
         if (controls_menu_.open && controls_menu_.handle_event(window_, event)) {
             continue;
         }
@@ -301,6 +305,10 @@ void ClientApp::poll_events() {
             if (kMenuButton.contains(point)) {
                 UiClickSound::instance().play();
                 pause_menu_open_ = !pause_menu_open_;
+            } else if (pause_menu_open_ && (kAccessibilityButton.contains(point) || kHelpButton.contains(point))) {
+                UiClickSound::instance().play();
+                assistance_menu_.help = kHelpButton.contains(point);
+                assistance_menu_.open = true;
             } else if (pause_menu_open_ && kControlsButton.contains(point)) {
                 UiClickSound::instance().play();
                 controls_menu_.open = true;
@@ -492,7 +500,12 @@ void ClientApp::set_player_look(Mirror& mirror, const std::uint8_t hp) {
 }
 
 void ClientApp::update_impacts(const float elapsed_seconds) {
+    const auto& options = PlayerProfile::shared().accessibility();
     for (auto& [id, mirror] : entities_) {
+        if (options.no_flashes) {
+            mirror.flash = 0.f;
+            mirror.blink = 0.f;
+        }
         mirror.flash = std::max(0.f, mirror.flash - elapsed_seconds);
         mirror.blink = std::max(0.f, mirror.blink - elapsed_seconds);
         if (mirror.sprite < 0) continue;
@@ -512,6 +525,7 @@ void ClientApp::update_impacts(const float elapsed_seconds) {
         if (mirror.halo >= 0) world_.Sprites[mirror.halo].Color.a = dim ? 60 : kHaloOpacity;
     }
     shake_ = std::max(0.f, shake_ - elapsed_seconds);
+    if (options.reduced_motion) shake_ = 0.f;
     if (shake_ > 0.f) {
         // Our player was hit: the whole game view jolts, less and less.
         const float amplitude = kShakePixels * shake_ / kShakeSeconds;
@@ -669,10 +683,13 @@ void ClientApp::draw_pause_menu() {
     pause_gui_.button(window_, ui_font_, kClickSoundButton,
                       sound_enabled ? "Son : ON" : "Son : OFF", mouse, pressed,
                       true, sound_enabled ? 1 : 2, 20);
-    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 24);
+    pause_gui_.button(window_, ui_font_, kControlsButton, "Controles", mouse, pressed, true, 0, 20);
+    pause_gui_.button(window_, ui_font_, kAccessibilityButton, "Accessibilite", mouse, pressed, true, 0, 19);
+    pause_gui_.button(window_, ui_font_, kHelpButton, "Comment jouer", mouse, pressed, true, 0, 18);
     if (controls_menu_.open) {
         controls_menu_.draw(window_, ui_font_, pause_gui_);
     }
+    if (assistance_menu_.open) assistance_menu_.draw(window_, ui_font_, pause_gui_);
 }
 
 void ClientApp::render() {
@@ -682,7 +699,9 @@ void ClientApp::render() {
     const float elapsed_seconds = std::min(frame_clock_.restart().asSeconds(), 0.1f);
     update_adventure(elapsed_seconds);
     update_impacts(elapsed_seconds);
-    automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
+    if (!PlayerProfile::shared().accessibility().reduced_motion) {
+        automatic_background_x_ += elapsed_seconds * background::kAutomaticScrollSpeed;
+    }
     window_.clear(sf::Color::Black);
     draw_parallax();
 

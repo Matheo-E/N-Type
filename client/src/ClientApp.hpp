@@ -20,6 +20,7 @@
 #include "GuiSkin.hpp"
 #include "WindowState.hpp"
 #include "ControlsMenu.hpp"
+#include "AssistanceMenu.hpp"
 #include "ExplosionEffects.hpp"
 #include "ImpactSounds.hpp"
 #include "Hud.hpp"
@@ -79,6 +80,7 @@ private:
     sf::Font ui_font_;
     GuiSkin pause_gui_;
     ControlsMenu controls_menu_;
+    AssistanceMenu assistance_menu_;
     ExplosionEffects explosions_;
     ImpactSounds impact_sounds_;
     float shake_ = 0.f; // seconds of screen shake left (our own player was hit)

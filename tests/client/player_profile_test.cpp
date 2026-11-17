@@ -67,6 +67,34 @@ int main() {
         assert(profile.reset_controls());
         assert(profile.device() == ControlDevice::Keyboard);
         assert(profile.best_score("Ann") == 500); // restoring controls keeps scores
+        assert(!profile.accessibility().reduced_motion);
+        assert(!profile.accessibility().no_flashes);
+        assert(!profile.accessibility().auto_fire);
+        assert(profile.set_accessibility({true, true, true}));
+        assert(profile.input({}) == 16);
+        assert(profile.select_device(ControlDevice::Mouse));
+        assert(profile.input({}) == 16);
+        assert(profile.select_device(ControlDevice::Gamepad));
+        assert(profile.input({}) == 16);
+        assert(profile.reset_controls());
+        assert(profile.accessibility().auto_fire); // resetting controls keeps accessibility
+    }
+    {
+        PlayerProfile profile(path);
+        assert(profile.accessibility().reduced_motion);
+        assert(profile.accessibility().no_flashes);
+        assert(profile.accessibility().auto_fire);
+        assert(profile.best_score("Ann") == 500);
+        assert(profile.set_accessibility({false, false, false}));
+        assert(profile.input({}) == 0);
+    }
+    {
+        // Older profiles and malformed optional values keep safe defaults.
+        std::ofstream(path) << R"({"accessibility":{"auto_fire":"yes","no_flashes":true}})";
+        PlayerProfile profile(path);
+        assert(!profile.accessibility().auto_fire);
+        assert(!profile.accessibility().reduced_motion);
+        assert(profile.accessibility().no_flashes);
     }
     {
         std::ofstream(path) << "broken JSON";

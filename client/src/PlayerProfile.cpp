@@ -80,6 +80,16 @@ void PlayerProfile::load() {
                     scores_[it.key()] = it.value().get<std::uint32_t>();
             }
         }
+        if (json.contains("accessibility") && json["accessibility"].is_object()) {
+            const auto& options = json["accessibility"];
+            if (options.contains("reduced_motion") && options["reduced_motion"].is_boolean())
+                accessibility_.reduced_motion = options["reduced_motion"].get<bool>();
+            if (options.contains("no_flashes") && options["no_flashes"].is_boolean())
+                accessibility_.no_flashes = options["no_flashes"].get<bool>();
+            if (options.contains("auto_fire") && options["auto_fire"].is_boolean())
+                accessibility_.auto_fire = options["auto_fire"].get<bool>();
+        }
+        if (!json.contains("controls")) return;
         const auto& controls = json.at("controls");
         const int device = controls.at("device").get<int>();
         auto keys = controls.at("keyboard").get<decltype(keys_)>();
@@ -101,7 +111,9 @@ bool PlayerProfile::save() {
     try {
         if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path());
         auto temporary = path_; temporary += ".tmp";
-        const nlohmann::json json = {{"best_scores", scores_}, {"controls", {
+        const nlohmann::json json = {{"accessibility", {
+            {"reduced_motion", accessibility_.reduced_motion}, {"no_flashes", accessibility_.no_flashes},
+            {"auto_fire", accessibility_.auto_fire}}}, {"best_scores", scores_}, {"controls", {
             {"device", static_cast<int>(device_)}, {"keyboard", keys_}, {"mouse", mouse_}, {"gamepad", buttons_}}}};
         std::ofstream file(temporary, std::ios::trunc);
         file << json.dump(2) << '\n';
@@ -148,6 +160,11 @@ bool PlayerProfile::bind_gamepad(int action, unsigned button) {
 bool PlayerProfile::select_device(ControlDevice device) { device_ = device; return save(); }
 bool PlayerProfile::reset_controls() { defaults(); return save(); }
 
+bool PlayerProfile::set_accessibility(AccessibilitySettings settings) {
+    accessibility_ = settings;
+    return save();
+}
+
 std::string PlayerProfile::binding_name(int action) const {
     if (device_ == ControlDevice::Keyboard) {
         std::string label;
@@ -184,6 +201,7 @@ std::uint8_t PlayerProfile::input(const ControlState& state) const {
         }
         if (pressed) bits |= static_cast<std::uint8_t>(1u << action);
     }
+    if (accessibility_.auto_fire) bits |= static_cast<std::uint8_t>(protocol::InputType::Shoot);
     return bits;
 }
 

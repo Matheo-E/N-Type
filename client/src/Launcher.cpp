@@ -23,6 +23,7 @@
 #include "Protocol.hpp"
 #include "PlayerColors.hpp"
 #include "UiClickSound.hpp"
+#include "AssistanceMenu.hpp"
 #include "UiFont.hpp"
 
 namespace ntype::client {
@@ -164,6 +165,7 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
     std::size_t active = 0;
     bool settings_open = false;
     ControlsMenu controls_menu;
+    AssistanceMenu assistance_menu;
     std::string error;
     const sf::FloatRect panel{55.f, 60.f, 450.f, 315.f};
     const sf::FloatRect play_button{200.f, 330.f, 160.f, 70.f};
@@ -178,9 +180,13 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
     const sf::FloatRect lobby_title{80.f, 98.f, 400.f, 38.f};
     const sf::FloatRect back_button{15.f, 12.f, 43.f, 43.f};
     const sf::FloatRect settings_button{502.f, 12.f, 43.f, 43.f};
-    const sf::FloatRect music_toggle{170.f, 151.f, 220.f, 55.f};
-    const sf::FloatRect click_toggle{170.f, 220.f, 220.f, 55.f};
-    const sf::FloatRect controls_button{170.f, 287.f, 220.f, 55.f};
+    const sf::FloatRect music_toggle{150.f, 108.f, 260.f, 43.f};
+    const sf::FloatRect click_toggle{150.f, 155.f, 260.f, 43.f};
+    const sf::FloatRect controls_button{150.f, 202.f, 260.f, 43.f};
+
+    const sf::FloatRect accessibility_button{150.f, 249.f, 260.f, 43.f};
+    const sf::FloatRect help_button{150.f, 296.f, 260.f, 43.f};
+    const sf::FloatRect title_help{190.f, 279.f, 180.f, 43.f};
 
     const auto busy = [&]() { return session && session->busy(); };
     const auto lobby_row = [](const std::size_t row) {
@@ -276,6 +282,7 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
     while (window.isOpen()) {
         sf::Event event{};
         while (window.pollEvent(event)) {
+            if (assistance_menu.open && assistance_menu.handle_event(window, event)) continue;
             if (controls_menu.open && controls_menu.handle_event(window, event)) {
                 continue;
             }
@@ -301,7 +308,11 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                 const auto point = window.mapPixelToCoords({event.mouseButton.x, event.mouseButton.y});
                 if (page == Page::Title) {
-                    if (play_button.contains(point)) {
+                    if (title_help.contains(point)) {
+                        click_sound.play();
+                        assistance_menu.help = true;
+                        assistance_menu.open = true;
+                    } else if (play_button.contains(point)) {
                         click_sound.play();
                         page = Page::Connection;
                     }
@@ -313,7 +324,11 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
                     continue;
                 }
                 if (settings_open) {
-                    if (controls_button.contains(point)) {
+                    if (accessibility_button.contains(point) || help_button.contains(point)) {
+                        click_sound.play();
+                        assistance_menu.help = help_button.contains(point);
+                        assistance_menu.open = true;
+                    } else if (controls_button.contains(point)) {
                         click_sound.play();
                         controls_menu.open = true;
                     } else if (music_toggle.contains(point)) {
@@ -480,6 +495,8 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
             const float logo_width = std::min(400.f, view.width - 32.f);
             draw_logo(window, game_logo, {(560.f - logo_width) / 2.f, 16.f, logo_width, 134.f});
             gui.button(window, *font, play_button, "PLAY", mouse, pressed, true, 2, 29);
+            gui.button(window, *font, title_help, "Comment jouer", mouse, pressed, true, 0, 17);
+            if (assistance_menu.open) assistance_menu.draw(window, *font, gui);
             window.display();
             continue;
         }
@@ -592,18 +609,21 @@ bool show_launcher(sf::RenderWindow& window, WindowState& window_state, Connecti
             shade.setPosition(view.left, view.top);
             shade.setFillColor(sf::Color(21, 37, 67, 160));
             window.draw(shade);
-            gui.panel(window, *font, "Reglages", {130.f, 104.f, 300.f, 280.f});
+            gui.panel(window, *font, "Reglages", {120.f, 65.f, 320.f, 319.f});
             gui.button(window, *font, music_toggle, settings.music_enabled ? "Musique : ON" : "Musique : OFF",
                        mouse, pressed, true, settings.music_enabled ? 1 : 2);
             gui.button(window, *font, click_toggle, click_sound.enabled() ? "Son : ON" : "Son : OFF",
                        mouse, pressed, true, click_sound.enabled() ? 1 : 2);
             gui.button(window, *font, controls_button, "Controles", mouse, pressed);
+            gui.button(window, *font, accessibility_button, "Accessibilite", mouse, pressed);
+            gui.button(window, *font, help_button, "Comment jouer", mouse, pressed);
             gui.centered(window, *font, "F11 : plein ecran", {150.f, 350.f, 260.f, 23.f}, 13, style::muted);
             gui.icon(window, {3090, 315, 185, 195}, settings_button);
         }
         if (controls_menu.open) {
             controls_menu.draw(window, *font, gui);
         }
+        if (assistance_menu.open) assistance_menu.draw(window, *font, gui);
         window.display();
     }
     settings.click_sound_enabled = click_sound.enabled();

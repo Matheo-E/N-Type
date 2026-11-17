@@ -101,8 +101,31 @@ stick or D-pad (25% dead zone), button 1 to shoot and button 8 to pause; buttons
 can be reassigned. The configured keyboard pause key also works in these modes.
 Close the window or use the menu icon if a controller is disconnected.
 
+**Accessibilite** is available from launcher settings and the in-game pause menu.
+Three independent options apply immediately and are saved across restarts:
+
+- **Mouvements reduits** freezes background scrolling and removes camera shake.
+- **Sans flashs d'impact** removes enemy/player hit flashes and player blinking.
+  Health indicators, damage sprites and danger zones remain visible.
+- **Tir automatique** fires continuously without holding a button, with the normal
+  server fire rate. It stops during local pause, in menus, when the window loses
+  focus, and for spectators.
+
+All three options are OFF by default. Use the mouse, or Tab/Up/Down followed by
+Enter/Space in the accessibility panel; Escape returns. Resetting controls keeps
+these preferences and personal records. Save failures are displayed in the panel.
+These are client-side options; they do not change collisions or game rules.
+
+**Comment jouer** is available on the title screen, in settings and in pause.
+You are **M. Jean Cive**, a tooth on the way to the dentist who gets attacked.
+Cross the ice, candy land and dentist's lab, dodge shots and danger zones, fire
+toothpaste, collect items and defeat each boss, alone or with up to four players.
+The help panel displays the current device's bindings. Controls can be changed
+under **Controles**. Local pause blocks your inputs, but the multiplayer game
+continues running.
+
 Scores are local to this computer and indexed by the exact player name; controls
-are shared by all local names. Both are stored in `n-type/client.json` under
+are shared by all local names. Scores, controls and accessibility settings are stored in `n-type/client.json` under
 `$XDG_CONFIG_HOME` (or `~/.config`) on Linux, and `%APPDATA%/N-Type/client.json`
 on Windows. `NTYPE_PROFILE_PATH` overrides the file path, including for tests.
 
@@ -120,8 +143,7 @@ appropriate router/hosting configuration; a LAN address is only reachable on tha
 
 - Move your tooth: arrows, WASD or ZQSD. Its wings animate continuously, including
   while stationary, using frames 0 → 1 → 2 → 1 at 8 steps per second. Animation
-  changes only the sprite, not server positions or collision bounds. Space sends
-  "fire" (not used by the server yet).
+  changes only the sprite, not server positions or collision bounds. Space fires toothpaste.
 - Pause menu: Escape or the menu icon. It shows the lobby name and room code, can
   resume, leave the lobby (**Lobby**), or toggle music and click sounds. This menu
   stops local movement input; the lobby's game keeps running. Close the window to quit.
@@ -204,6 +226,7 @@ additional volleys in `attack_patterns.json` (20–22). `Game::drop_item` in
 | [engine/](engine/) | Shared ECS: World, components, Movement and Draw systems |
 | [ClientApp.cpp](client/src/ClientApp.cpp) | The game: mirrors the lobby's snapshots into an engine World and draws it; pause menu |
 | [Launcher.cpp](client/src/Launcher.cpp) | Title, connection, main menu, lobby list, create, waiting room and settings |
+| [AssistanceMenu.cpp](client/src/AssistanceMenu.cpp) | Shared accessibility settings panel and lore/gameplay help |
 | [ControlsMenu.cpp](client/src/ControlsMenu.cpp) | Persistent keyboard/mouse/gamepad bindings shared with gameplay |
 | [GuiSkin.hpp](client/src/GuiSkin.hpp) | Shared FreeGUI drawing and smooth text helpers |
 | [WindowState.hpp](client/src/WindowState.hpp) | Shared window bounds and fullscreen restoration |
@@ -348,7 +371,13 @@ four edges, a full server and crash timeouts. For visual checks:
 4. Open pause with Escape or the icon. Check Continuer, the lobby name and code, Lobby,
    music and click-sound controls. Open Controles from both settings and pause; switch
    tabs, remap an action, return and verify that gameplay uses the new binding.
-   Restart the client and check that the binding and personal best score persist.
+   Open Accessibilite, test each option and navigate with Tab/arrows and Enter.
+   With reduced motion ON the scenery stays still and hits do not shake the view;
+   with flash removal ON characters do not flash or blink after hits. Turn automatic
+   fire ON: it shoots without holding a button, but stops when paused or unfocused.
+   Restart the client and check that bindings, accessibility and best scores persist.
+   Open Comment jouer from the title, settings and pause; check the lore, active
+   bindings, Retour/Escape, resize and F11.
 5. Start three clients: create a lobby in one, join it from the list in the second and
    by room code in the third, rename it and start it from the leader. Join a playing
    lobby to check the spectator banner, then type `gameover <code>` in the server:
