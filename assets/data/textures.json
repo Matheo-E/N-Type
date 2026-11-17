@@ -1,0 +1,30 @@
+{
+  "textures": [
+    { "id": 1, "path": "sprites/player/tooth.png" },
+    { "id": 2, "path": "sprites/enemies/level_01_ice/ice_chomper.png" },
+    { "id": 3, "path": "sprites/enemies/level_01_ice/small_ice_enemy.png" },
+    { "id": 4, "path": "sprites/enemies/level_01_ice/ice_arrow.png" },
+    { "id": 5, "path": "sprites/enemies/level_01_ice/large_ice_enemy.png" },
+    { "id": 6, "path": "sprites/enemies/level_01_ice/ice_monster.png" },
+    { "id": 7, "path": "sprites/enemies/level_01_ice/spiked_ice_ball.png" },
+    { "id": 8, "path": "sprites/enemies/level_02_candy/wrapped_candy.png" },
+    { "id": 9, "path": "sprites/enemies/level_02_candy/jelly_bean.png" },
+    { "id": 10, "path": "sprites/enemies/level_02_candy/candy_blob_projectile.png" },
+    { "id": 11, "path": "sprites/enemies/level_02_candy/gummy_worm.png" },
+    { "id": 12, "path": "sprites/enemies/level_02_candy/candy_boss.png" },
+    { "id": 13, "path": "sprites/enemies/level_02_candy/candy_boss_fist.png" },
+    { "id": 14, "path": "sprites/enemies/level_03_dentist_lab/syringe.png" },
+    { "id": 15, "path": "sprites/enemies/level_03_dentist_lab/evil_mask.png" },
+    { "id": 16, "path": "sprites/enemies/level_03_dentist_lab/toxic_blob.png" },
+    { "id": 17, "path": "sprites/enemies/level_03_dentist_lab/evil_dentures.png" },
+    { "id": 18, "path": "sprites/enemies/level_03_dentist_lab/infected_tooth.png" },
+    { "id": 19, "path": "sprites/enemies/level_03_dentist_lab/infected_tooth_projectile.png" },
+    { "id": 20, "path": "sprites/items/2_nuzz_item.png" },
+    { "id": 21, "path": "sprites/player/tooth_halo.png" },
+    { "id": 22, "path": "sprites/effects/slash.png" },
+    { "id": 23, "path": "sprites/player/tooth_damaged.png" },
+    { "id": 24, "path": "sprites/player/tooth_broken.png" },
+    { "id": 25, "path": "sprites/player/tooth_damaged_halo.png" },
+    { "id": 26, "path": "sprites/player/tooth_broken_halo.png" }
+  ]
+}

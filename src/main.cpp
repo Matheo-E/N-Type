@@ -1,0 +1,23 @@
+#include "../engine/include/System.hpp"
+#include "../engine/include/Factory.hpp"
+#include "../engine/include/Loader.hpp"
+
+#include <string>
+
+int main(void) {
+    World world;
+    if (!LoadEnemies(world, NTYPE_ASSETS_DIR)) {
+        return 1;
+    }
+    sf::RenderWindow win;
+    CreateGame(win, "Ntype");
+    int player = CreateEPlayer(world, {50.0f, 500.0f});
+    CreateEEnemy(world, {250.0f, 100.0f}, 1);  // fairy
+    CreateEEnemy(world, {550.0f, 100.0f}, 2);  // midboss
+    sf::Clock clock;
+    float dt = clock.restart().asSeconds();
+    while(win.isOpen()) {
+        Action(world, win, dt, player);
+        dt = clock.restart().asSeconds();
+    }
+}

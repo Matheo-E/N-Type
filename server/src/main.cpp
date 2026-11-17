@@ -2,59 +2,42 @@
 #include <csignal>
 #include <exception>
 #include <iostream>
-#include <random>
-#include <string_view>
-#include <vector>
 
-#include <ntype/engine/util/Log.hpp>
-#include <ntype/rtype/Assets.hpp>
-#include <ntype/rtype/GameData.hpp>
-
-#include "ServerApp.hpp"
-#include "ServerConfig.hpp"
+#include "Options.hpp"
+#include "Server.hpp"
 
 namespace {
 
-constexpr int kExitFailure = 84;
+std::atomic<bool> running{true};
 
-std::atomic<bool> g_stop_requested{false};
-
-extern "C" void on_signal(int /*signal*/) {
-    g_stop_requested.store(true);
-}
+void on_signal(int) { running = false; }
 
 } // namespace
 
 int main(int argc, char** argv) {
-    using namespace ntype;
-    const std::vector<std::string_view> args(argv + 1, argv + argc);
-    auto config = server::ServerConfig::from_args(args);
-    if (!config) {
-        std::cerr << "r-type_server: " << config.error() << "\n\n" << server::ServerConfig::usage();
-        return kExitFailure;
-    }
-    if (config->show_help) {
-        std::cout << server::ServerConfig::usage();
-        return 0;
-    }
-    if (!config->seed) {
-        config->seed = std::random_device{}();
-    }
-
-    const auto assets = rtype::find_assets_directory(config->assets, argv[0]);
-    if (!assets) {
-        engine::log::error("assets directory not found (use --assets <dir>)");
-        return kExitFailure;
-    }
-
     try {
-        auto data = rtype::GameData::load_from_file(*assets / "data" / "game.json");
-        server::ServerApp app(*config, std::move(data), g_stop_requested);
+        const ntype::Options options = ntype::parse_options(argc, argv, ntype::Application::Server);
+        if (options.help) {
+            std::cout << "USAGE: ./r-type_server [-p port] [--no-enemies]\n"
+                         "  -p port        UDP port to listen on (default 4242)\n"
+                         "  --no-enemies   games have no enemies, only ships (for tests)\n"
+                         "Console commands: level <code>, gameover <code>, score <code> <slot> <points>\n";
+            return 0;
+        }
         std::signal(SIGINT, on_signal);
         std::signal(SIGTERM, on_signal);
-        return app.run();
+        ntype::server::Server server(options.port, options.no_enemies);
+#ifndef _WIN32
+        // Started in the background (`&`), reading the terminal would stop the whole
+        // server; ignoring SIGTTIN makes the read fail and the console thread end.
+        std::signal(SIGTTIN, SIG_IGN);
+#endif
+        ntype::server::Console console;
+        server.set_console(&console);
+        server.run(running);
     } catch (const std::exception& error) {
-        engine::log::error("{}", error.what());
-        return kExitFailure;
+        std::cerr << "[server] fatal: " << error.what() << '\n';
+        return 84;
     }
+    return 0;
 }

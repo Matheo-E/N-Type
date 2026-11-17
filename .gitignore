@@ -1,19 +1,22 @@
-# Build trees and vcpkg output
+# Generated files and dependencies
 /build/
 /out/
-/vcpkg_installed/
-# vcpkg checkout fetched by build.sh / build.bat when VCPKG_ROOT is unset
+/docs/api/
 /vcpkg/
+/vcpkg_installed/
+/vcpkg-cache/
 CMakeUserPresets.json
+/r-type_client
+/r-type_server
+/ntype_sandbox
+*.exe
+*.dll
 
-# IDEs
+# Editors
 /.vscode/
 /.idea/
 /.vs/
 *.swp
 
-# Binaries copied to the root by build.sh / build.bat
-/r-type_server
-/r-type_client
-*.exe
-*.dll
+# Python test cache
+__pycache__/

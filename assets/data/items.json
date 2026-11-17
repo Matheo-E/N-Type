@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "rapid_fire",
+      "radius": 16,
+      "sprite": { "texture": 20, "rect": [0, 0, 1536, 1024], "scale": 0.026 },
+      "flight_pattern": 2,
+      "speed": 100,
+      "effects": { "fire_interval": -0.05 }
+    }
+  ]
+}

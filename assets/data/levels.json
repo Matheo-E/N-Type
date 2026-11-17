@@ -1,0 +1,56 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "name": "ice",
+      "waves": [
+        { "time": 2,  "enemy": 2, "count": 3, "interval": 1.2, "y": 180, "y_step": 180 },
+        { "time": 8,  "enemy": 1, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
+        { "time": 14, "enemy": 3, "count": 1, "y": 360 },
+        { "time": 20, "enemy": 2, "count": 4, "interval": 0.8, "y": 120, "y_step": 160 },
+        { "time": 27, "enemy": 1, "count": 3, "interval": 1.0, "y": 150, "y_step": 210 },
+        { "time": 34, "enemy": 3, "count": 2, "interval": 2.0, "y": 200, "y_step": 320 },
+        { "time": 40, "enemy": 2, "count": 3, "interval": 0.6, "y": 240, "y_step": 120 },
+        { "time": 44, "enemy": 1, "count": 2, "interval": 0.8, "y": 120, "y_step": 480 },
+        { "time": 50, "enemy": 3, "count": 1, "y": 360 },
+        { "time": 52, "enemy": 2, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 }
+      ],
+      "boss": { "time": 60, "enemy": 4, "x": 1100, "y": 360 }
+    },
+    {
+      "id": 2,
+      "name": "candy",
+      "waves": [
+        { "time": 2,  "enemy": 6, "count": 3, "interval": 1.0, "y": 160, "y_step": 200 },
+        { "time": 7,  "enemy": 5, "count": 3, "interval": 1.2, "y": 140, "y_step": 220 },
+        { "time": 13, "enemy": 7, "count": 1, "y": 360 },
+        { "time": 18, "enemy": 6, "count": 5, "interval": 0.7, "y": 100, "y_step": 130 },
+        { "time": 25, "enemy": 5, "count": 4, "interval": 0.8, "y": 120, "y_step": 160 },
+        { "time": 31, "enemy": 7, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
+        { "time": 37, "enemy": 6, "count": 4, "interval": 0.6, "y": 180, "y_step": 120 },
+        { "time": 42, "enemy": 5, "count": 3, "interval": 0.6, "y": 120, "y_step": 240 },
+        { "time": 48, "enemy": 7, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 },
+        { "time": 54, "enemy": 6, "count": 3, "interval": 0.8, "y": 200, "y_step": 160 }
+      ],
+      "boss": { "time": 65, "enemy": 8, "x": 1100, "y": 360 }
+    },
+    {
+      "id": 3,
+      "name": "dentist_lab",
+      "waves": [
+        { "time": 2,  "enemy": 10, "count": 3, "interval": 1.0, "y": 180, "y_step": 180 },
+        { "time": 7,  "enemy": 9,  "count": 3, "interval": 1.0, "y": 140, "y_step": 220 },
+        { "time": 13, "enemy": 11, "count": 1, "y": 360 },
+        { "time": 18, "enemy": 10, "count": 5, "interval": 0.6, "y": 100, "y_step": 130 },
+        { "time": 24, "enemy": 9,  "count": 4, "interval": 0.7, "y": 120, "y_step": 160 },
+        { "time": 30, "enemy": 11, "count": 2, "interval": 1.5, "y": 200, "y_step": 320 },
+        { "time": 36, "enemy": 10, "count": 4, "interval": 0.5, "y": 160, "y_step": 130 },
+        { "time": 41, "enemy": 9,  "count": 4, "interval": 0.5, "y": 120, "y_step": 160 },
+        { "time": 47, "enemy": 11, "count": 2, "interval": 1.0, "y": 160, "y_step": 400 },
+        { "time": 52, "enemy": 10, "count": 3, "interval": 0.6, "y": 200, "y_step": 160 },
+        { "time": 58, "enemy": 9,  "count": 3, "interval": 0.6, "y": 160, "y_step": 200 }
+      ],
+      "boss": { "time": 70, "enemy": 12, "x": 1100, "y": 360 }
+    }
+  ]
+}

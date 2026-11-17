@@ -1,98 +1,74 @@
 #!/usr/bin/env bash
-# Builds N-Type and copies r-type_server and r-type_client to the repository root.
-#
-# Uses $VCPKG_ROOT when it is set; otherwise fetches vcpkg once into ./vcpkg.
-# Run ./build.sh --help for the options.
-
+# Build the small client and server with vcpkg dependencies.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-usage() {
-    cat <<'EOF'
-USAGE: ./build.sh [options]
-  --debug        debug build (default: release)
-  --server-only  build only the server and the tests (no SFML needed)
-  --clean        delete the previous build of the chosen configuration first
-  -h, --help     show this help
-EOF
-}
-
-die() {
-    echo "build.sh: $*" >&2
-    exit 1
-}
-
 preset=linux-release
-server_only=0
 clean=0
 for arg in "$@"; do
     case "$arg" in
         --debug) preset=linux-debug ;;
-        --server-only) server_only=1 ;;
         --clean) clean=1 ;;
-        -h | --help) usage; exit 0 ;;
-        *) usage >&2; die "unknown option '$arg'" ;;
+        -h|--help)
+            echo "Usage: ./build.sh [--debug] [--clean] [--help]"
+            exit 0 ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
-# The server-only preset is a debug build without the client.
-if [[ $server_only == 1 ]]; then
-    preset=linux-server
-fi
 
 for tool in git cmake ninja; do
-    command -v "$tool" > /dev/null || die "'$tool' is required but not installed"
+    command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
-command -v c++ > /dev/null || command -v g++ > /dev/null || command -v clang++ > /dev/null ||
-    die "a C++ compiler is required (GCC 14+ or Clang 18+)"
-
-# SFML needs a few system headers on Linux. Catch the most common setup
-# problem here instead of deep inside the dependency build.
-if [[ $server_only == 0 ]] && command -v pkg-config > /dev/null &&
-    ! pkg-config --exists x11 xrandr xcursor xi gl libudev 2> /dev/null; then
-    cat >&2 <<'EOF'
-build.sh: the X11/OpenGL/udev development headers SFML needs are missing.
-  Debian/Ubuntu: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev \
-                   libgl1-mesa-dev libudev-dev libasound2-dev autoconf automake libtool
-  Fedora:        sudo dnf install libX11-devel libXrandr-devel libXcursor-devel libXi-devel \
-                   mesa-libGL-devel systemd-devel alsa-lib-devel autoconf automake libtool
-Or build without the client: ./build.sh --server-only
-EOF
+missing=()
+for tool in pkg-config autoconf autoreconf autoheader aclocal automake libtoolize; do
+    command -v "$tool" >/dev/null || missing+=("$tool")
+done
+# autoconf-archive provides macros, not an executable. ALSA needs these
+# even when all the Autotools commands are already installed.
+if command -v aclocal >/dev/null; then
+    IFS=: read -r -a aclocal_dirs <<< "${ACLOCAL_PATH:-}:$(aclocal --print-ac-dir)"
+    archive_found=0
+    for dir in "${aclocal_dirs[@]}"; do
+        if [[ -n "$dir" && -f "$dir/ax_check_compile_flag.m4" ]]; then
+            archive_found=1
+            break
+        fi
+    done
+    [[ $archive_found == 1 ]] || missing+=("autoconf-archive")
+fi
+if command -v pkg-config >/dev/null && ! pkg-config --exists x11 xrandr xcursor xi gl glu libudev; then
+    missing+=("X11/OpenGL/GLU/udev development headers")
+fi
+if (( ${#missing[@]} > 0 )); then
+    printf 'Missing build dependencies: %s\n' "${missing[*]}" >&2
+    cat >&2 <<'PACKAGES'
+SFML graphics and audio (ALSA) need these system dependencies.
+Debian/Ubuntu/Pop!_OS: sudo apt install pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libudev-dev autoconf autoconf-archive automake libtool
+Fedora: sudo dnf install pkgconf-pkg-config libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel mesa-libGLU-devel systemd-devel autoconf autoconf-archive automake libtool
+PACKAGES
     exit 1
 fi
 
-if [[ -n ${VCPKG_ROOT:-} ]]; then
-    [[ -x $VCPKG_ROOT/vcpkg ]] || die "VCPKG_ROOT=$VCPKG_ROOT is not a bootstrapped vcpkg"
-else
-    VCPKG_ROOT=$PWD/vcpkg
-    if [[ ! -d $VCPKG_ROOT/.git ]]; then
-        echo "-- Fetching vcpkg into ./vcpkg (first build only)"
-        # Commits only; vcpkg downloads the files it needs on demand.
+if [[ -z ${VCPKG_ROOT:-} ]]; then
+    export VCPKG_ROOT="$PWD/vcpkg"
+    if [[ ! -d "$VCPKG_ROOT/.git" ]]; then
         git clone --filter=tree:0 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
     fi
-    if [[ ! -x $VCPKG_ROOT/vcpkg ]]; then
+    if [[ ! -x "$VCPKG_ROOT/vcpkg" ]]; then
         "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
     fi
 fi
-export VCPKG_ROOT
+if [[ ! -x "$VCPKG_ROOT/vcpkg" ]]; then
+    echo "VCPKG_ROOT must point to a bootstrapped vcpkg checkout." >&2
+    exit 1
+fi
 
 if [[ $clean == 1 ]]; then
-    rm -rf "build/$preset"
+    rm -rf "build/client-$preset"
 fi
-
-echo "-- Building with preset $preset (the first build also compiles the dependencies)"
 cmake --preset "$preset"
 cmake --build --preset "$preset"
-
-for binary in r-type_server r-type_client; do
-    rm -f "$binary"
-    if [[ -f build/$preset/bin/$binary ]]; then
-        cp "build/$preset/bin/$binary" .
-    fi
+for binary in r-type_client r-type_server ntype_sandbox; do
+    cp "build/client-$preset/bin/$binary" "./$binary"
 done
-
-echo
-echo "Done. Run from the repository root:"
-echo "  ./r-type_server -p 4242"
-if [[ -f r-type_client ]]; then
-    echo "  ./r-type_client -h 127.0.0.1 -p 4242"
-fi
+echo "Run ./r-type_server, then ./r-type_client (or ./ntype_sandbox to try the engine alone)"

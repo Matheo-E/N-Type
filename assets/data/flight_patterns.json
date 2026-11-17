@@ -1,0 +1,26 @@
+{
+  "flight_patterns": [
+    {
+      "id": 1,
+      "name": "chase_player",
+      "type": "chase",
+      "forward": 1
+    },
+    {
+      "id": 2,
+      "name": "advance_left",
+      "type": "straight",
+      "direction": -90,
+      "forward": 1
+    },
+    {
+      "id": 3,
+      "name": "vertical_patrol",
+      "type": "sine",
+      "direction": -90,
+      "forward": 0,
+      "amplitude": 100,
+      "frequency": 0.07234
+    }
+  ]
+}

@@ -1,83 +1,341 @@
 #include "ClientNetwork.hpp"
 
-#include <chrono>
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <stdexcept>
+#include <system_error>
 
-#include <ntype/rtype/protocol/Transport.hpp>
+#include "GameConfig.hpp"
 
 namespace ntype::client {
 
+using namespace std::chrono_literals;
+using protocol::LobbyPhase;
+using protocol::MessageType;
+
 namespace {
 
-constexpr auto kPingInterval = std::chrono::seconds(1);
-constexpr auto kServerTimeout = std::chrono::seconds(5);
-constexpr int kDisconnectCopies = 3;
+constexpr std::chrono::milliseconds kConnectRetry = 500ms;
+constexpr std::chrono::seconds kNoAnswer = 3s;
+constexpr std::chrono::seconds kListEvery = 1s;
+constexpr std::chrono::milliseconds kResend = 250ms;
+constexpr std::chrono::seconds kGiveUp = 3s;
+constexpr std::chrono::seconds kTimeout = 5s; // The server drops silent clients after 5 s too.
+
+std::string refuse_text(const std::uint8_t reason) {
+    switch (static_cast<protocol::LobbyRefuseReason>(reason)) {
+    case protocol::LobbyRefuseReason::NotFound:
+        return "No lobby with this code";
+    case protocol::LobbyRefuseReason::Full:
+        return "This lobby is full";
+    case protocol::LobbyRefuseReason::TooManyLobbies:
+        return "The server has too many lobbies";
+    }
+    return "Refused by the server";
+}
 
 } // namespace
 
-ClientNetwork::ClientNetwork() : thread_(0, inbound_, outbound_) {
-    thread_.start();
+bool is_valid_name(const std::string& name) {
+    return !name.empty() && name.size() <= protocol::kMaxPlayerName &&
+           std::all_of(name.begin(), name.end(), [](const char c) { return c >= 32 && c <= 126; });
 }
 
-void ClientNetwork::connect(const engine::net::Endpoint& server,
-                            const engine::time::TimePoint now) {
-    server_.emplace(server, now);
-    last_ping_ = now;
-    static_cast<void>(inbound_.drain());
-}
-
-void ClientNetwork::disconnect(const engine::time::TimePoint now) {
-    if (!server_) {
-        return;
+ClientNetwork::ClientNetwork(const std::string& host, const std::uint16_t port, std::string name)
+    : name_(std::move(name)), address_(host + ":" + std::to_string(port)),
+      socket_(io_, asio::ip::udp::endpoint(asio::ip::udp::v4(), 0)), status_("Connecting to " + address_) {
+    if (!is_valid_name(name_)) {
+        throw std::invalid_argument(kInvalidName);
     }
-    // Disconnect is unreliable: send a few copies rather than waiting for acks.
-    for (int copy = 0; copy < kDisconnectCopies; ++copy) {
-        send(rtype::protocol::Disconnect{}, now);
-    }
-    server_.reset();
+    asio::ip::udp::resolver resolver(io_);
+    server_ = *resolver.resolve(asio::ip::udp::v4(), host, std::to_string(port)).begin();
+    socket_.non_blocking(true);
 }
 
-void ClientNetwork::send(const rtype::protocol::Message& message,
-                         const engine::time::TimePoint now) {
-    if (server_) {
-        outbound_.push({server_->remote(), rtype::protocol::make_packet(*server_, message, now)});
+ClientNetwork::~ClientNetwork() {
+    disconnect();
+}
+
+Phase ClientNetwork::phase() const {
+    if (!connected_) {
+        return Phase::Connecting;
+    }
+    return lobby_ ? Phase::InLobby : Phase::Browsing;
+}
+
+bool ClientNetwork::is_leader() const {
+    return lobby_ && lobby_->yourSlot == lobby_->leaderSlot;
+}
+
+bool ClientNetwork::is_spectator() const {
+    if (!lobby_) {
+        return false;
+    }
+    return std::any_of(lobby_->members.begin(), lobby_->members.end(), [this](const protocol::LobbyMember& m) {
+        return m.slot == lobby_->yourSlot && m.role == protocol::MemberRole::Spectator;
+    });
+}
+
+void ClientNetwork::send(const std::vector<std::uint8_t>& bytes) {
+    std::error_code error;
+    socket_.send_to(asio::buffer(bytes), server_, 0, error);
+    if (error && error != asio::error::would_block && error != asio::error::try_again) {
+        status_ = "Network error: " + error.message();
     }
 }
 
-std::vector<rtype::protocol::Message> ClientNetwork::poll(const engine::time::TimePoint now) {
-    std::vector<rtype::protocol::Message> messages;
-    for (const auto& inbound : inbound_.drain()) {
-        // Only the server we talk to is trusted.
-        if (!server_ || inbound.from != server_->remote()) {
+void ClientNetwork::receive() {
+    // Bound the work per frame even if a peer floods the socket.
+    for (int count = 0; count < 128; ++count) {
+        std::array<std::uint8_t, 1500> bytes{};
+        asio::ip::udp::endpoint from;
+        std::error_code error;
+        const std::size_t size = socket_.receive_from(asio::buffer(bytes), from, 0, error);
+        if (error == asio::error::would_block || error == asio::error::try_again) {
+            break;
+        }
+        if (error || from != server_) {
             continue;
         }
-        if (auto message = rtype::protocol::receive(*server_, inbound.packet, now)) {
-            messages.push_back(std::move(*message));
-        }
+        handle({bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(size)});
     }
-    return messages;
 }
 
-void ClientNetwork::update(const engine::time::TimePoint now) {
-    if (!server_) {
+void ClientNetwork::handle(const std::vector<std::uint8_t>& bytes) {
+    const std::optional<protocol::Packet> packet = protocol::decode(bytes);
+    if (!packet) {
         return;
     }
-    for (auto& packet : server_->collect_resends(now)) {
-        outbound_.push({server_->remote(), std::move(packet)});
+    if (packet->type == MessageType::ConnectRefuse) {
+        if (!connected_) {
+            status_ = "Server full - retrying";
+        }
+        return;
     }
-    if (now - last_ping_ >= kPingInterval) {
-        last_ping_ = now;
-        const auto since_start =
-            std::chrono::duration_cast<std::chrono::milliseconds>(now - epoch_);
-        send(rtype::protocol::Ping{static_cast<std::uint32_t>(since_start.count())}, now);
+    if (packet->type == MessageType::ConnectAccept && !connected_) {
+        connected_ = true;
+        status_ = "Connected";
+        last_list_ = {};
+    }
+    if (!connected_) {
+        return;
+    }
+    last_received_ = Clock::now();
+    switch (packet->type) {
+    case MessageType::LobbyList:
+        lobbies_ = packet->lobbies;
+        list_received_ = true;
+        break;
+    case MessageType::LobbyState:
+        on_state(packet->lobby);
+        break;
+    case MessageType::LobbyRefuse:
+        error_ = refuse_text(packet->value);
+        pending_.reset();
+        break;
+    case MessageType::WorldSnapshot:
+        if (lobby_ && lobby_->state == LobbyPhase::Playing) {
+            on_snapshot(*packet);
+        }
+        break;
+    case MessageType::EntityDied:
+        if (lobby_ && lobby_->state == LobbyPhase::Playing) {
+            deaths_.push_back(packet->entities.front());
+        }
+        break;
+    case MessageType::ClientLeft:
+        std::erase_if(players_, [&](const protocol::Entity& player) { return player.id == packet->id; });
+        std::erase_if(entities_, [&](const protocol::Entity& entity) {
+            return entity.kind == config::kPlayerKind && entity.id == packet->id;
+        });
+        break;
+    default:
+        break; // Not used by this client.
     }
 }
 
-bool ClientNetwork::timed_out(const engine::time::TimePoint now) const {
-    return server_ && server_->timed_out(now, kServerTimeout);
+// A frame arrives in parts; it replaces the shown one once every part is there.
+// Parts of an older frame than the one shown, or being built, are dropped.
+void ClientNetwork::on_snapshot(const protocol::Packet& packet) {
+    const auto newer = [](const std::uint32_t a, const std::uint32_t b) {
+        return static_cast<std::int32_t>(a - b) > 0; // survives the counter wrapping
+    };
+    if (shown_frame_ && !newer(packet.frame, *shown_frame_)) {
+        return;
+    }
+    if (building_parts_.empty() || packet.frame != building_frame_) {
+        if (!building_parts_.empty() && newer(building_frame_, packet.frame)) {
+            return; // Late part of a frame already replaced by a newer one.
+        }
+        building_frame_ = packet.frame;
+        building_parts_.assign(packet.parts, std::nullopt);
+    }
+    if (packet.part >= building_parts_.size() || building_parts_[packet.part]) {
+        return;
+    }
+    building_parts_[packet.part] = packet.entities;
+    if (std::any_of(building_parts_.begin(), building_parts_.end(), [](const auto& part) { return !part; })) {
+        return;
+    }
+    entities_.clear();
+    for (const auto& part : building_parts_) {
+        entities_.insert(entities_.end(), part->begin(), part->end());
+    }
+    players_.clear();
+    for (const auto& entity : entities_) {
+        if (entity.kind == config::kPlayerKind && entity.id >= 1 && entity.id <= config::kMaxPlayers) {
+            players_.push_back(entity);
+        }
+    }
+    shown_frame_ = building_frame_;
+    building_parts_.clear();
 }
 
-float ClientNetwork::rtt_ms() const noexcept {
-    return server_ ? server_->rtt_ms() : 0.0F;
+void ClientNetwork::clear_world() {
+    players_.clear();
+    entities_.clear();
+    deaths_.clear();
+    building_parts_.clear();
+    shown_frame_.reset();
+}
+
+std::vector<protocol::Entity> ClientNetwork::take_deaths() {
+    std::vector<protocol::Entity> deaths;
+    deaths.swap(deaths_);
+    return deaths;
+}
+
+void ClientNetwork::on_state(const protocol::LobbyState& state) {
+    bool accept = false;
+    if (lobby_) {
+        accept = state.code == lobby_->code;
+    } else if (pending_ && pending_->entering) {
+        // A late state of the lobby we just left must not pull us back in.
+        accept = pending_->enters ? state.code == *pending_->enters : state.code != left_code_;
+    } else {
+        // The server still counts us as a member: our leave was lost.
+        send(protocol::makeLobbyLeave());
+        return;
+    }
+    if (!accept) {
+        return;
+    }
+    lobby_ = state;
+    if (state.state != LobbyPhase::Playing) {
+        clear_world();
+    }
+}
+
+void ClientNetwork::request(const std::function<std::vector<std::uint8_t>()>& make, std::function<bool()> done,
+                            const bool entering, std::optional<std::string> code) {
+    std::vector<std::uint8_t> bytes;
+    try {
+        bytes = make();
+    } catch (const std::invalid_argument&) {
+        error_ = "Invalid name or code";
+        return;
+    }
+    const Clock::time_point now = Clock::now();
+    error_.clear();
+    pending_ = Pending{bytes, std::move(done), std::move(code), entering, now, now};
+    send(bytes);
+}
+
+void ClientNetwork::create(const std::string& name) {
+    request([&] { return protocol::makeLobbyCreate(name); }, [this] { return lobby_.has_value(); }, true);
+}
+
+void ClientNetwork::join(std::string code) {
+    std::transform(code.begin(), code.end(), code.begin(),
+                   [](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    if (code == left_code_) {
+        left_code_.clear(); // Joining it again on purpose.
+    }
+    request([&] { return protocol::makeLobbyJoin(code); }, [this] { return lobby_.has_value(); }, true, code);
+}
+
+void ClientNetwork::leave() {
+    if (!lobby_) {
+        return;
+    }
+    left_code_ = lobby_->code;
+    lobby_.reset();
+    clear_world();
+    list_received_ = false;
+    request([] { return protocol::makeLobbyLeave(); }, [this] { return list_received_; });
+    if (pending_) {
+        pending_->leaving = true;
+    }
+}
+
+void ClientNetwork::rename(const std::string& name) {
+    request([&] { return protocol::makeLobbyRename(name); }, [this, name] { return lobby_ && lobby_->name == name; });
+}
+
+void ClientNetwork::start() {
+    request([] { return protocol::makeLobbyStart(); },
+            [this] { return lobby_ && lobby_->state == LobbyPhase::Playing; });
+}
+
+void ClientNetwork::reset() {
+    connected_ = false;
+    lobbies_.clear();
+    lobby_.reset();
+    clear_world();
+    pending_.reset();
+    left_code_.clear();
+}
+
+void ClientNetwork::update(const std::uint8_t input) {
+    receive();
+    const Clock::time_point now = Clock::now();
+    if (connected_ && now - last_received_ > kTimeout) {
+        reset();
+        status_ = "Connection lost - reconnecting";
+        connect_started_ = now;
+    }
+    if (!connected_) {
+        if (now - last_connect_ >= kConnectRetry) {
+            send(protocol::makeConnectRequest(name_));
+            last_connect_ = now;
+        }
+        if (status_.starts_with("Connecting") && now - connect_started_ > kNoAnswer) {
+            status_ = "No server answered on " + address_;
+        }
+        return;
+    }
+    // Sent every frame, so it is also our heartbeat.
+    send(protocol::makeInput(input));
+    // No list request while leaving: only the answer to LobbyLeave may confirm it.
+    const bool leaving = pending_ && pending_->leaving;
+    if (!lobby_ && !leaving && now - last_list_ >= kListEvery) {
+        send(protocol::makeLobbyListRequest());
+        last_list_ = now;
+    }
+    if (pending_) {
+        if (pending_->done()) {
+            pending_.reset();
+        } else if (now - pending_->first_sent > kGiveUp) {
+            error_ = "Server did not respond";
+            pending_.reset();
+        } else if (now - pending_->last_sent >= kResend) {
+            send(pending_->bytes);
+            pending_->last_sent = now;
+        }
+    }
+}
+
+void ClientNetwork::disconnect() {
+    if (!connected_) {
+        return;
+    }
+    const std::vector<std::uint8_t> message = protocol::makeDisconnect();
+    // UDP can lose a packet; repeat the disconnect, with the server timeout as fallback.
+    for (int copy = 0; copy < 3; ++copy) {
+        send(message);
+    }
+    reset();
 }
 
 } // namespace ntype::client
