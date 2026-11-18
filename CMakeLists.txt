@@ -53,6 +53,7 @@ add_subdirectory(server)
 if(NTYPE_BUILD_CLIENT)
     add_executable(ntype_sandbox sandbox/main.cpp)
     target_link_libraries(ntype_sandbox PRIVATE ntype_engine)
+    target_include_directories(ntype_sandbox PRIVATE "${CMAKE_SOURCE_DIR}/client/src") # UiFont.hpp
     target_compile_definitions(ntype_sandbox PRIVATE NTYPE_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
 endif()
 
